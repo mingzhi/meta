@@ -9,6 +9,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
 )
@@ -29,6 +30,7 @@ func main() {
 	command.On("makeudb", "make usearch db", &makeUdbCmd{}, []string{})
 	command.On("orthomcl", "OrthoMCL", &ortholMclCmd{}, []string{})
 	command.On("orthoaln", "align orthologs", &alignOrthologCmd{}, []string{})
+	command.On("readanchor", "read anchor", &readAnchorCmd{}, []string{})
 	// Parse and run commands.
 	command.ParseAndRun()
 }
@@ -218,4 +220,58 @@ func (cmd *alignOrthologCmd) Run(args []string) {
 	if err != nil {
 		log.Panic(err)
 	}
+}
+
+type readAnchorCmd struct {
+	workspace *string
+	prefix    *string
+	samout    *string
+}
+
+func (cmd *readAnchorCmd) Flags(fs *flag.FlagSet) *flag.FlagSet {
+	cmd.workspace = fs.String("w", "", "workspace")
+	cmd.prefix = fs.String("p", "", "prefix")
+	cmd.samout = fs.String("s", "", "bam output folder")
+
+	return fs
+}
+
+func (cmd *readAnchorCmd) Run(args []string) {
+	registerLogger()
+	// find strains.
+	speciesMapFileName := filepath.Join(*cmd.workspace, "species_map.json")
+	speciesMap := meta.ReadSpeciesMap(speciesMapFileName)
+	strains, found := speciesMap[*cmd.prefix]
+	if !found {
+		WARN.Fatalf("Can't not find strains for %s\n", *cmd.prefix)
+	}
+
+	readMap := make(map[string]meta.SamRecords)
+	for _, strain := range strains {
+		fileName := strain.Path + ".align.bam"
+		filePath := filepath.Join(*cmd.samout, strain.Path, fileName)
+		header, records := meta.ReadBamFile(filePath)
+		m := meta.SeparateSamRecords(header.Refs(), records)
+		for genome, recs := range m {
+			acc := findRefAcc(genome)
+			readMap[acc] = recs
+			INFO.Println(genome)
+		}
+	}
+
+	alignments := meta.ReadAlignments(filepath.Join(*cmd.workspace, *cmd.prefix+"_orthologs_aln.json"))
+
+	mappedReads := meta.ReadAnchor(readMap, alignments)
+	n := 0
+	for _, mr := range mappedReads {
+		if len(mr) > 500 {
+			n++
+		}
+	}
+	INFO.Println(n)
+}
+
+func findRefAcc(name string) string {
+	re := regexp.MustCompile("NC_\\d+")
+	return re.FindString(name)
 }
