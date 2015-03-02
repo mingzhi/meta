@@ -6,6 +6,7 @@ import (
 	"runtime"
 )
 
+// Return sequence records for each ortholog clusters.
 func FindOrthologs(strains []Strain, dir string, clusters [][]string) []ncbiutils.SeqRecords {
 	// Load sequence records for each genome.
 	ncpu := runtime.GOMAXPROCS(0)

@@ -31,6 +31,7 @@ func main() {
 	command.On("orthomcl", "OrthoMCL", &ortholMclCmd{}, []string{})
 	command.On("orthoaln", "align orthologs", &alignOrthologCmd{}, []string{})
 	command.On("readanchor", "read anchor", &readAnchorCmd{}, []string{})
+	command.On("profile_genome", "position profile genome", &posProfileCmd{}, []string{})
 	// Parse and run commands.
 	command.ParseAndRun()
 }
@@ -274,4 +275,30 @@ func (cmd *readAnchorCmd) Run(args []string) {
 func findRefAcc(name string) string {
 	re := regexp.MustCompile("NC_\\d+")
 	return re.FindString(name)
+}
+
+type posProfileCmd struct {
+	workspace *string
+	prefix    *string
+	ref       *string
+}
+
+func (cmd *posProfileCmd) Flags(fs *flag.FlagSet) *flag.FlagSet {
+	cmd.workspace = fs.String("w", "", "workspace")
+	cmd.ref = fs.String("r", "", "reference genome diretory")
+	cmd.prefix = fs.String("p", "", "prefix")
+
+	return fs
+}
+
+func (cmd *posProfileCmd) Run(args []string) {
+	registerLogger()
+	speciesMapFileName := filepath.Join(*cmd.workspace, "species_map.json")
+	speciesMap := meta.ReadSpeciesMap(speciesMapFileName)
+	strains, found := speciesMap[*cmd.prefix]
+	if !found {
+		log.Fatalf("Can not find strain information for %s from species_map.json\n", *cmd.prefix)
+	}
+
+	meta.GenomePosProfiling(strains, *cmd.ref)
 }

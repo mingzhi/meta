@@ -1,5 +1,7 @@
 package meta
 
+// Perform ortholog clustering using reciprocal best hit and MCL.
+
 import (
 	"bufio"
 	"bytes"

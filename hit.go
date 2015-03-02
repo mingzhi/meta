@@ -1,5 +1,7 @@
 package meta
 
+// Functions for parsing usearch results.
+
 import (
 	"math"
 	"strconv"

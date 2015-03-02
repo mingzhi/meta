@@ -1,5 +1,7 @@
 package meta
 
+// BAM file operations.
+
 import (
 	"bytes"
 	"code.google.com/p/biogo.bam/bam"
@@ -10,6 +12,8 @@ import (
 	"sort"
 )
 
+// A container for a group of SAM records.
+// It implements sort.Interface for sorting and searching.
 type SamRecords []*sam.Record
 
 func (sr SamRecords) Len() int      { return len(sr) }
@@ -20,12 +24,15 @@ func (sr SamRecords) Search(pos int) (index int) {
 	return
 }
 
+// A struct for sorting SAM records by left cordinate.
 type ByLeftCoordinate struct{ SamRecords }
 
 func (b ByLeftCoordinate) Less(i, j int) bool {
 	return b.SamRecords[i].Pos < b.SamRecords[j].Pos
 }
 
+// Read BAM file and return its header and records.
+// NOT explicitly sorted.
 func ReadBamFile(fileName string) (header *sam.Header, records []*sam.Record) {
 	// Open bam file.
 	f, err := os.Open(fileName)
@@ -57,6 +64,8 @@ func ReadBamFile(fileName string) (header *sam.Header, records []*sam.Record) {
 	return
 }
 
+// Separate SAM records for different reference genomes.
+// Return a map of genome reference name to records.
 func SeparateSamRecords(refs []*sam.Reference, records SamRecords) map[string]SamRecords {
 	m := make(map[string]SamRecords)
 	for _, ref := range refs {
