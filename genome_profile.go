@@ -11,6 +11,13 @@ import (
 	"strings"
 )
 
+const (
+	FirstPos byte = 1 << iota
+	SecondPos
+	ThirdPos
+	FourFold
+)
+
 // Generate a position profile for a genome.
 // strain: Strain contains the path and genome name.
 // dir: folder containing genome sequences.
@@ -72,15 +79,15 @@ func GenomePosProfiling(strains []Strain, dir string) {
 						for j, _ := range nucl {
 							switch (j + 1) % 3 {
 							case 1:
-								prof[j] = 1
+								prof[j] = FirstPos
 							case 2:
-								prof[j] = 2
-							case 3:
+								prof[j] = SecondPos
+							case 0:
 								codon := nucl[j-2 : j+1]
 								if gc.FFCodons[string(codon)] {
-									prof[j] = 8
+									prof[j] = FourFold
 								} else {
-									prof[j] = 4
+									prof[j] = ThirdPos
 								}
 							}
 						}
@@ -97,6 +104,7 @@ func GenomePosProfiling(strains []Strain, dir string) {
 					// Save genome profile to file.
 					fileName := strings.Replace(fnaFilePath, "fna", "pos", -1)
 					writePosProfile(fileName, profile)
+					Info.Println(fileName)
 				}
 			}
 			done <- true

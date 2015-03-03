@@ -3,7 +3,6 @@ package meta
 // BAM file operations.
 
 import (
-	"bytes"
 	"code.google.com/p/biogo.bam/bam"
 	"code.google.com/p/biogo.bam/sam"
 	"io"
@@ -87,25 +86,4 @@ func FindSorted(ref string, records SamRecords) SamRecords {
 	sort.Sort(ByLeftCoordinate{founds})
 
 	return founds
-}
-
-// Obtain the sequence of a read mapping to the reference genome.
-// Return the mapped sequence.
-func map2Ref(r *sam.Record) []byte {
-	s := []byte{}
-	p := 0                 // position in the read sequence.
-	read := r.Seq.Expand() // read sequence.
-	for _, c := range r.Cigar {
-		switch c.Type() {
-		case sam.CigarMatch, sam.CigarMismatch, sam.CigarEqual:
-			s = append(s, read[p:p+c.Len()]...)
-			p += c.Len()
-		case sam.CigarInsertion, sam.CigarSoftClipped, sam.CigarHardClipped:
-			p += c.Len()
-		case sam.CigarDeletion, sam.CigarSkipped:
-			s = append(s, bytes.Repeat([]byte{'*'}, c.Len())...)
-		}
-	}
-
-	return s
 }

@@ -32,6 +32,7 @@ func main() {
 	command.On("orthoaln", "align orthologs", &alignOrthologCmd{}, []string{})
 	command.On("readanchor", "read anchor", &readAnchorCmd{}, []string{})
 	command.On("profile_genome", "position profile genome", &posProfileCmd{}, []string{})
+	command.On("cov_genome", "calculate cov for a genome", &cmdCovGenome{}, []string{})
 	// Parse and run commands.
 	command.ParseAndRun()
 }

@@ -1,15 +1,15 @@
-package meta
+// This programe generate a species map {speciesName: []Strains}.
+package main
 
 import (
 	"encoding/csv"
 	"encoding/json"
+	"flag"
 	"github.com/mingzhi/ncbiutils"
-	"io/ioutil"
 	"log"
 	"os"
 	"path/filepath"
 	"strconv"
-	"strings"
 )
 
 type Strain struct {
@@ -23,35 +23,38 @@ type Strain struct {
 }
 
 type Genome struct {
-	Accession  string
-	Replicon   string
-	Length     int
-	Seq        []byte
-	PosProfile []byte
+	Accession string
+	Replicon  string
+	Length    int
 }
+
+var (
+	workspace, ref, tax string
+)
 
 var (
 	Info *log.Logger
 	Warn *log.Logger
 )
 
-// GennerateSpeciesMap:
-// generates a species map file and store it into workspace.
-// workspace: output dir
-// ref: reference genome folder.
-// tax: taxonomy ftp folder.
-func GenerateSpeciesMap(workspace, ref, tax string) {
+func init() {
+	flag.StringVar(&workspace, "w", "", "workspace")
+	flag.StringVar(&ref, "r", "", "reference genome diretory")
+	flag.StringVar(&tax, "t", "", "taxonomy ftp diretory")
+	Info = log.New(os.Stdout, "INFO: ", log.Ldate|log.Ltime|log.Lshortfile)
+	Warn = log.New(os.Stdout, "WARN: ", log.Ldate|log.Ltime|log.Lshortfile)
+}
 
-	records := readSummary(ref)
+func main() {
+	flag.Parse()
+
+	records := readSummary()
 
 	strainMap := make(map[string]Strain)
 	taxMap := ncbiutils.ReadTaxas(tax)
-	uidMap := findPaths(ref)
 
 	for _, r := range records {
 		s, found := strainMap[r.ProjectId]
-
-		good := true
 
 		if !found {
 			s = Strain{}
@@ -63,34 +66,22 @@ func GenerateSpeciesMap(workspace, ref, tax string) {
 				s.Species = findSpecieName(s.TaxId, taxMap)
 			} else {
 				Warn.Printf("Could not find taxonomy for %s, %s\n", s.TaxId, s.Name)
-				good = false
 			}
-
-			if _, found := uidMap[s.ProjectId]; found {
-				s.Path = uidMap[s.ProjectId]
-			} else {
-				Warn.Printf("Cound not find path for %s\n", s.Name)
-				good = false
-			}
-
 		}
 
-		if good {
-			g := Genome{}
-			g.Accession = r.Accession
-			g.Replicon = r.Replicon
-			g.Length = r.Length
-			s.Genomes = append(s.Genomes, g)
+		g := Genome{}
+		g.Accession = r.Accession
+		g.Replicon = r.Replicon
+		g.Length = r.Length
+		s.Genomes = append(s.Genomes, g)
 
-			strainMap[r.ProjectId] = s
-		}
+		strainMap[r.ProjectId] = s
 	}
 
 	speciesMap := make(map[string][]Strain)
 	for _, s := range strainMap {
 		if s.Species != "" {
-			species := strings.Replace(s.Species, " ", "_", -1)
-			speciesMap[species] = append(speciesMap[species], s)
+			speciesMap[s.Species] = append(speciesMap[s.Species], s)
 		}
 	}
 
@@ -123,13 +114,11 @@ type Record struct {
 }
 
 // Read summary.txt in Bacteria ftp folder.
-// ref: reference genome folder.
-func readSummary(ref string) (records []Record) {
+func readSummary() (records []Record) {
 	fileName := "summary.txt"
 	filePath := filepath.Join(ref, fileName)
 	f, err := os.Open(filePath)
 	if err != nil {
-		Info.Println(filePath)
 		log.Fatalln("Could not find summary.txt!")
 	}
 	defer f.Close()
@@ -175,24 +164,4 @@ func findSpecieName(id string, m map[string]ncbiutils.Taxa) string {
 // return the genetic code Id.
 func findGeneticCode(id string, m map[string]ncbiutils.Taxa) string {
 	return m[id].GeneticCode.Id
-}
-
-// findPaths returns a map of strain and path map.
-func findPaths(ref string) map[string]string {
-	m := make(map[string]string)
-	fileInfos, err := ioutil.ReadDir(ref)
-	if err != nil {
-		log.Panic(err)
-	}
-	for _, fi := range fileInfos {
-		if fi.IsDir() {
-			terms := strings.Split(fi.Name(), "_")
-			if strings.Contains(terms[len(terms)-1], "uid") {
-				uid := strings.Replace(terms[len(terms)-1], "uid", "", -1)
-				m[uid] = fi.Name()
-			}
-		}
-	}
-
-	return m
 }
