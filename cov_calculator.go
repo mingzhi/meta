@@ -2,6 +2,7 @@ package meta
 
 import (
 	"github.com/mingzhi/gomath/stat/correlation"
+	"github.com/mingzhi/gomath/stat/desc"
 )
 
 type CovCalculator struct {
@@ -27,4 +28,21 @@ func (cc *CovCalculator) GetResult(i int) float64 {
 
 func (cc *CovCalculator) GetN(i int) int {
 	return cc.corrs[i].GetN()
+}
+
+type KsCalculator struct {
+	Mean *desc.Mean
+	Var  *desc.Variance
+}
+
+func NewKsCalculator() *KsCalculator {
+	kc := KsCalculator{}
+	kc.Mean = desc.NewMean()
+	kc.Var = desc.NewVarianceWithBiasCorrection()
+	return &kc
+}
+
+func (kc *KsCalculator) Increment(v float64) {
+	kc.Mean.Increment(v)
+	kc.Var.Increment(v)
 }

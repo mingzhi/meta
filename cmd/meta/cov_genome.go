@@ -1,115 +1,238 @@
 package main
 
+// Caclulate sequence correlations for each reference genome,
+// by mapping reads to it.
+
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
-	"github.com/mingzhi/gomath/stat/desc"
 	"github.com/mingzhi/meta"
+	"github.com/spf13/viper"
 	"log"
 	"math"
+	"math/rand"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 )
 
+type CovResult struct {
+	Ks, VarKs float64
+	Ct        []float64
+	CtIndices []int
+	CtN       []int
+	N         int
+}
+
 type cmdCovGenome struct {
-	workspace *string // workspace
-	prefix    *string // prefix of bacterial species
-	ref       *string // reference genome database.
-	samout    *string // sam output diretory
-	maxl      *int    // max length of correlation
+	workspace *string // workspace.
+	config    *string // configure file name.
+	prefix    *string // prefix of bacterial species.
+
+	samout    string // sam output diretory.
+	outdir    string
+	ref       string // reference genome database.
+	maxl      int    // max length of correlation.
+	bootstrap int    // number of bootstraps.
+
+	pos int // position in a codon to calculate.
 }
 
 func (cmd *cmdCovGenome) Flags(fs *flag.FlagSet) *flag.FlagSet {
+	cmd.config = fs.String("c", "config", "configure file name")
 	cmd.workspace = fs.String("w", "", "workspace")
-	cmd.ref = fs.String("r", "", "reference genome diretory")
-	cmd.samout = fs.String("s", "", "sam output folder")
 	cmd.prefix = fs.String("p", "", "prefix")
-	cmd.maxl = fs.Int("m", 100, "maxl")
 	return fs
 }
 
+func (cmd *cmdCovGenome) init() {
+	viper.SetConfigName(*cmd.config)
+	viper.AddConfigPath(*cmd.workspace)
+	viper.ReadInConfig()
+
+	cmd.ref = viper.GetString("reference")
+	cmd.samout = viper.GetString("samout")
+	cmd.outdir = viper.GetString("outdir")
+	cmd.maxl = viper.GetInt("maxl")
+	cmd.bootstrap = viper.GetInt("bootstrap")
+}
+
 func (cmd *cmdCovGenome) Run(args []string) {
+	cmd.init()
 	registerLogger()
+	// Load species map.
 	speciesMapFileName := filepath.Join(*cmd.workspace, "species_map.json")
 	speciesMap := meta.ReadSpeciesMap(speciesMapFileName)
+	// Find the wanted species,
+	// stop if it could not find.
 	strains, found := speciesMap[*cmd.prefix]
 	if !found {
-		log.Fatalf("Can not find strain information for %s from species_map.json\n", *cmd.prefix)
+		log.Fatalf("Can not find strain information for %s from species_map.json\n",
+			*cmd.prefix)
 	}
 
-	var cm []*MeanVar
-	for i := 0; i < *cmd.maxl; i++ {
-		cm = append(cm, NewMeanVar())
-	}
+	// Make position profiles.
+	meta.GenomePosProfiling(strains, cmd.ref)
+
+	positions := []int{0, 1, 2, 3, 4} // positions to be calculated.
 
 	for _, s := range strains {
 		for _, genome := range s.Genomes {
+			// We now only looks at chromosome genome.
 			if strings.Contains(genome.Replicon, "chromosome") {
+				// Read read records from a bam file.
 				bamFileName := s.Path + ".align.bam"
-				bamFilePath := filepath.Join(*cmd.samout, s.Path, bamFileName)
+				bamFilePath := filepath.Join(cmd.samout, s.Path, bamFileName)
 				_, records := meta.ReadBamFile(bamFilePath)
+
 				// Read postion profile for the genome.
 				posFileName := findRefAcc(genome.Accession) + ".pos"
-				posFilePath := filepath.Join(*cmd.ref, s.Path, posFileName)
+				posFilePath := filepath.Join(cmd.ref, s.Path, posFileName)
 				genome.PosProfile = meta.ReadPosProfile(posFilePath)
+
 				// Read sequence for the genome.
 				fnaFileName := findRefAcc(genome.Accession) + ".fna"
-				fnaFilePath := filepath.Join(*cmd.ref, s.Path, fnaFileName)
+				fnaFilePath := filepath.Join(cmd.ref, s.Path, fnaFileName)
 				genome.Seq = meta.ReadFasta(fnaFilePath).Seq
 
-				cc := meta.CovGenome(records, genome, *cmd.maxl)
-				for i := 0; i < *cmd.maxl; i++ {
-					if !math.IsNaN(cc.GetResult(i)) {
-						cm[i].Increment(cc.GetResult(i))
+				for _, pos := range positions {
+					cr := cmd.cov(records, genome, pos)
+
+					filePrefix := fmt.Sprintf("%s_cov_pos%d", s.Path, pos)
+
+					if !math.IsNaN(cr.VarKs) {
+						save2Json(cr, filepath.Join(*cmd.workspace, cmd.outdir, filePrefix+".json"))
+						save2tsv(cr, filepath.Join(*cmd.workspace, cmd.outdir, filePrefix+".tsv"))
 					}
 
-				}
+					// Bootstrap
+					if cmd.bootstrap > 0 {
+						crChan := cmd.boostrapping(records, genome, pos)
+						crs := []CovResult{}
+						for cr := range crChan {
+							if !math.IsNaN(cr.VarKs) {
+								crs = append(crs, cr)
+							}
+						}
+						fileName := filePrefix + "_bootstrap.json"
+						filePath := filepath.Join(*cmd.workspace, cmd.outdir, fileName)
+						f, err := os.Create(filePath)
+						if err != nil {
+							log.Panic(err)
+						}
+						defer f.Close()
 
-				outFileName := s.Path + "_cov.tsv"
-				outFilePath := filepath.Join(*cmd.workspace, outFileName)
-				out, err := os.Create(outFilePath)
-				if err != nil {
-					panic(err)
-				}
-				defer out.Close()
-
-				for i := 0; 3*i < *cmd.maxl; i++ {
-					out.WriteString(fmt.Sprintf("%d\t%f\t%d\n", i, cc.GetResult(3*i), cc.GetN(3*i)))
+						e := json.NewEncoder(f)
+						err = e.Encode(crs)
+						if err != nil {
+							log.Panic(err)
+						}
+					}
 				}
 			}
+		}
+	}
+}
 
+// Boostrapping.
+func (cmd *cmdCovGenome) boostrapping(records meta.SamRecords, genome meta.Genome, pos int) chan CovResult {
+	ncpu := runtime.GOMAXPROCS(0)
+	c := make(chan CovResult)
+	jobs := make(chan int)
+	go func() {
+		for i := 0; i < cmd.bootstrap; i++ {
+			jobs <- i
+		}
+		close(jobs)
+	}()
+
+	done := make(chan int)
+	for i := 0; i < ncpu; i++ {
+		go func() {
+			for j := range jobs {
+				rs := sample(records)
+				cr := cmd.cov(rs, genome, pos)
+				c <- cr
+				done <- j
+			}
+		}()
+	}
+
+	// wait and close result channel.
+	go func() {
+		for i := 0; i < cmd.bootstrap; i++ {
+			<-done
+		}
+		close(c)
+	}()
+	return c
+}
+
+// Calculate covariance for records.
+func (cmd *cmdCovGenome) cov(records meta.SamRecords, genome meta.Genome, pos int) CovResult {
+	kc, cc := meta.CovGenome(records, genome, cmd.maxl, pos)
+
+	cr := CovResult{}
+	cr.Ks = kc.Mean.GetResult()
+	cr.VarKs = kc.Var.GetResult()
+	cr.N = kc.Mean.GetN()
+	var step, length int
+	if pos == 0 {
+		step = 1
+		length = cmd.maxl
+	} else {
+		step = 3
+		length = cmd.maxl / 3
+	}
+	for i := 1; i < length; i++ {
+		v := cc.GetResult(step * i)
+		n := cc.GetN(step * i)
+		if !math.IsNaN(v) {
+			cr.CtIndices = append(cr.CtIndices, i)
+			cr.Ct = append(cr.Ct, v)
+			cr.CtN = append(cr.CtN, n)
 		}
 	}
 
-	outFileName := *cmd.prefix + "_cov.tsv"
-	outFilePath := filepath.Join(*cmd.workspace, outFileName)
-	out, err := os.Create(outFilePath)
+	return cr
+}
+
+// Sample with replacement.
+func sample(records meta.SamRecords) meta.SamRecords {
+	newRecords := meta.SamRecords{}
+	for i := 0; i < len(records); i++ {
+		r := rand.Intn(len(records))
+		newRecords = append(newRecords, records[r])
+	}
+	return newRecords
+}
+
+func save2Json(cr CovResult, fileName string) {
+	f, err := os.Create(fileName)
 	if err != nil {
-		panic(err)
+		log.Panic(err)
 	}
-	defer out.Close()
+	defer f.Close()
 
-	for i := 0; 3*i < *cmd.maxl; i++ {
-		out.WriteString(fmt.Sprintf("%d\t%f\t%d\n", i, cm[3*i].Mean.GetResult(), cm[3*i].Mean.GetN()))
-	}
-}
-
-type MeanVar struct {
-	Mean *desc.Mean
-	Var  *desc.Variance
-}
-
-func NewMeanVar() *MeanVar {
-	mean := desc.NewMean()
-	variance := desc.NewVarianceWithBiasCorrection()
-	return &MeanVar{
-		Mean: mean,
-		Var:  variance,
+	ec := json.NewEncoder(f)
+	if err := ec.Encode(cr); err != nil {
+		log.Panic(err)
 	}
 }
 
-func (m *MeanVar) Increment(d float64) {
-	m.Mean.Increment(d)
-	m.Var.Increment(d)
+func save2tsv(cr CovResult, fileName string) {
+	f, err := os.Create(fileName)
+	if err != nil {
+		log.Panic(err)
+	}
+	defer f.Close()
+
+	f.WriteString(fmt.Sprintf("#Ks=%f;VarKs=%f;N=%d\n", cr.Ks, cr.VarKs, cr.N))
+	for i, index := range cr.CtIndices {
+		v := cr.Ct[i]
+		n := cr.CtN[i]
+		f.WriteString(fmt.Sprintf("%d\t%f\t%d\n", index, v, n))
+	}
 }

@@ -104,7 +104,6 @@ func GenomePosProfiling(strains []Strain, dir string) {
 					// Save genome profile to file.
 					fileName := strings.Replace(fnaFilePath, "fna", "pos", -1)
 					writePosProfile(fileName, profile)
-					Info.Println(fileName)
 				}
 			}
 			done <- true
