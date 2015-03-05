@@ -64,3 +64,21 @@ func ReadFasta(fileName string) *seq.Sequence {
 
 	return seqs[0]
 }
+
+// return max int
+func maxInt(a, b int) int {
+	if a > b {
+		return a
+	} else {
+		return b
+	}
+}
+
+// return min int
+func minInt(a, b int) int {
+	if a < b {
+		return a
+	} else {
+		return b
+	}
+}

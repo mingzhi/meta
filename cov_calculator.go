@@ -30,6 +30,12 @@ func (cc *CovCalculator) GetN(i int) int {
 	return cc.corrs[i].GetN()
 }
 
+func (cc *CovCalculator) Append(cc2 *CovCalculator) {
+	for i := 0; i < len(cc.corrs); i++ {
+		cc.corrs[i].Append(cc2.corrs[i])
+	}
+}
+
 type KsCalculator struct {
 	Mean *desc.Mean
 	Var  *desc.Variance
@@ -45,4 +51,9 @@ func NewKsCalculator() *KsCalculator {
 func (kc *KsCalculator) Increment(v float64) {
 	kc.Mean.Increment(v)
 	kc.Var.Increment(v)
+}
+
+func (kc *KsCalculator) Append(kc2 *KsCalculator) {
+	kc.Mean.Append(kc2.Mean)
+	kc.Var.Append(kc2.Var)
 }

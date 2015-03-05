@@ -26,16 +26,20 @@ type CovResult struct {
 	N         int
 }
 
+type covGenomeFunc func(records meta.SamRecords, genome meta.Genome, maxl int, pos int) (*meta.KsCalculator, *meta.CovCalculator)
+
 type cmdCovGenome struct {
 	workspace *string // workspace.
 	config    *string // configure file name.
 	prefix    *string // prefix of bacterial species.
 
-	samout    string // sam output diretory.
-	outdir    string
-	ref       string // reference genome database.
-	maxl      int    // max length of correlation.
-	bootstrap int    // number of bootstraps.
+	samout      string // sam output diretory.
+	outdir      string
+	ref         string        // reference genome database.
+	maxl        int           // max length of correlation.
+	bootstrap   int           // number of bootstraps.
+	covFunc     covGenomeFunc // cov calculate function.
+	covFuncName string        // cov calculate function name.
 
 	pos int // position in a codon to calculate.
 }
@@ -57,6 +61,15 @@ func (cmd *cmdCovGenome) init() {
 	cmd.outdir = viper.GetString("outdir")
 	cmd.maxl = viper.GetInt("maxl")
 	cmd.bootstrap = viper.GetInt("bootstrap")
+
+	cmd.covFuncName = viper.GetString("CovGenomeFunc")
+	switch cmd.covFuncName {
+	case "CovReads":
+		cmd.covFunc = meta.CovReads
+	default:
+		cmd.covFunc = meta.CovGenome
+		cmd.covFuncName = "CovGenome"
+	}
 }
 
 func (cmd *cmdCovGenome) Run(args []string) {
@@ -100,7 +113,7 @@ func (cmd *cmdCovGenome) Run(args []string) {
 				for _, pos := range positions {
 					cr := cmd.cov(records, genome, pos)
 
-					filePrefix := fmt.Sprintf("%s_cov_pos%d", s.Path, pos)
+					filePrefix := fmt.Sprintf("%s_%s_pos%d", cmd.covFuncName, s.Path, pos)
 
 					if !math.IsNaN(cr.VarKs) {
 						save2Json(cr, filepath.Join(*cmd.workspace, cmd.outdir, filePrefix+".json"))
@@ -172,7 +185,7 @@ func (cmd *cmdCovGenome) boostrapping(records meta.SamRecords, genome meta.Genom
 
 // Calculate covariance for records.
 func (cmd *cmdCovGenome) cov(records meta.SamRecords, genome meta.Genome, pos int) CovResult {
-	kc, cc := meta.CovGenome(records, genome, cmd.maxl, pos)
+	kc, cc := cmd.covFunc(records, genome, cmd.maxl, pos)
 
 	cr := CovResult{}
 	cr.Ks = kc.Mean.GetResult()
