@@ -26,7 +26,7 @@ func main() {
 	INFO = log.New(os.Stdout, "INFO: ", log.Ldate|log.Ltime|log.Lshortfile)
 	WARN = log.New(os.Stdout, "WARN: ", log.Ldate|log.Ltime|log.Lshortfile)
 	// Register commands.
-	command.On("init", "initialize", &initCmd{}, []string{})
+	command.On("init", "initialize", &cmdInit{}, []string{})
 	command.On("makeudb", "make usearch db", &makeUdbCmd{}, []string{})
 	command.On("orthomcl", "OrthoMCL", &ortholMclCmd{}, []string{})
 	command.On("orthoaln", "align orthologs", &alignOrthologCmd{}, []string{})
@@ -40,25 +40,6 @@ func main() {
 func registerLogger() {
 	meta.Info = log.New(os.Stdout, "INFO: ", log.Ldate|log.Ltime|log.Lshortfile)
 	meta.Warn = log.New(os.Stdout, "WARN: ", log.Ldate|log.Ltime|log.Lshortfile)
-}
-
-type initCmd struct {
-	workspace *string
-	ref       *string
-	tax       *string
-}
-
-func (cmd *initCmd) Flags(fs *flag.FlagSet) *flag.FlagSet {
-	cmd.workspace = fs.String("w", "", "workspace")
-	cmd.ref = fs.String("r", "", "reference genome diretory")
-	cmd.tax = fs.String("t", "", "taxonomy ftp dump folder")
-
-	return fs
-}
-
-func (cmd *initCmd) Run(args []string) {
-	registerLogger()
-	meta.GenerateSpeciesMap(*cmd.workspace, *cmd.ref, *cmd.tax)
 }
 
 type ortholMclCmd struct {
