@@ -103,6 +103,15 @@ func (cmd *cmdCov) Run(args []string) {
 				// Read read records from a bam file.
 				bamFileName := s.Path + ".align.bam"
 				bamFilePath := filepath.Join(cmd.samout, s.Path, bamFileName)
+				// Check if the bam file exists.
+				if _, err := os.Stat(bamFilePath); err != 0 {
+					if os.IsNotExist(err) {
+						WARN.Printf("%s does not exist!\n", bamFilePath)
+						continue
+					} else {
+						log.Panicln(err)
+					}
+				}
 				_, records := meta.ReadBamFile(bamFilePath)
 				if len(records) == 0 {
 					WARN.Printf("%s\t%s zero records\n", s.Path, genome.Accession)
