@@ -104,7 +104,7 @@ func (cmd *cmdCov) Run(args []string) {
 				bamFileName := s.Path + ".align.bam"
 				bamFilePath := filepath.Join(cmd.samout, s.Path, bamFileName)
 				// Check if the bam file exists.
-				if _, err := os.Stat(bamFilePath); err != 0 {
+				if _, err := os.Stat(bamFilePath); err != nil {
 					if os.IsNotExist(err) {
 						WARN.Printf("%s does not exist!\n", bamFilePath)
 						continue
