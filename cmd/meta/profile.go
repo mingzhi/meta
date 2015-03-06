@@ -33,10 +33,11 @@ func (cmd *cmdProfile) init() {
 	viper.ReadInConfig()
 
 	cmd.ref = viper.GetString("reference")
+	registerLogger()
 }
 
 func (cmd *cmdProfile) Run(args []string) {
-	registerLogger()
+	cmd.init()
 	speciesMapFileName := filepath.Join(*cmd.workspace, "species_map.json")
 	speciesMap := meta.ReadSpeciesMap(speciesMapFileName)
 	strains, found := speciesMap[*cmd.prefix]
