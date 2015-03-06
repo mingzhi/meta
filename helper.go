@@ -32,6 +32,21 @@ func map2Ref(r *sam.Record) []byte {
 	return s
 }
 
+// Obtain the sequence of a pair of mated reads to the reference genome.
+func mated2Ref(r PairedEndRead) []byte {
+	s1 := map2Ref(r.ReadLeft)
+	s2 := map2Ref(r.ReadRight)
+	space := r.ReadRight.Pos - (r.ReadLeft.Pos + len(s1))
+	if space > 0 {
+		s1 = append(s1, bytes.Repeat([]byte{'*'}, space)...)
+		s1 = append(s1, s2...)
+	} else {
+		s1 = append(s1, s2[-space:]...)
+	}
+
+	return s1
+}
+
 // Read postion profile for a genome.
 func ReadPosProfile(fileName string) []byte {
 	f, err := os.Open(fileName)

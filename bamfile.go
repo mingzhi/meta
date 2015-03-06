@@ -23,11 +23,18 @@ func (sr SamRecords) Search(pos int) (index int) {
 	return
 }
 
-// A struct for sorting SAM records by left cordinate.
+// A wrapper for sorting SAM records by left cordinate.
 type ByLeftCoordinate struct{ SamRecords }
 
 func (b ByLeftCoordinate) Less(i, j int) bool {
 	return b.SamRecords[i].Pos < b.SamRecords[j].Pos
+}
+
+// A wrapper for sorting SAM records by read name.
+type ByReadName struct{ SamRecords }
+
+func (b ByReadName) Less(i, j int) bool {
+	return b.SamRecords[i].Name < b.SamRecords[j].Name
 }
 
 // Read BAM file and return its header and records.
@@ -86,4 +93,69 @@ func FindSorted(ref string, records SamRecords) SamRecords {
 	sort.Sort(ByLeftCoordinate{founds})
 
 	return founds
+}
+
+// Container for paired-end reads.
+type PairedEndRead struct {
+	Name      string      // read name.
+	ReadLeft  *sam.Record // left read.
+	ReadRight *sam.Record // right read.
+}
+
+type PairedEndReads []PairedEndRead
+
+func (p PairedEndReads) Len() int {
+	return len(p)
+}
+
+func (p PairedEndReads) Swap(i, j int) {
+	p[i], p[j] = p[j], p[i]
+}
+
+type ByNamePairedEndReads struct{ PairedEndReads }
+
+func (p ByNamePairedEndReads) Less(i, j int) bool {
+	return p.PairedEndReads[i].Name < p.PairedEndReads[j].Name
+}
+
+type ByLeftCoordinatePairedEndReads struct{ PairedEndReads }
+
+func (p ByLeftCoordinatePairedEndReads) Less(i, j int) bool {
+	return p.PairedEndReads[i].ReadLeft.Pos < p.PairedEndReads[j].ReadLeft.Pos
+}
+
+func GetPairedEndReads(records SamRecords) PairedEndReads {
+	// Sort records by name.
+	sort.Sort(ByReadName{records})
+
+	matedReads := []PairedEndRead{}
+	var name string
+	for _, r := range records {
+		// Check if it has a mat
+		if r.MateRef != nil && r.Ref == r.MateRef {
+			if name != r.Name {
+				matedReads = append(matedReads, PairedEndRead{})
+				name = r.Name
+			}
+
+			lastIndex := len(matedReads) - 1
+			if r.Pos < r.MatePos {
+				matedReads[lastIndex].ReadLeft = r
+			} else {
+				matedReads[lastIndex].ReadRight = r
+			}
+
+			matedReads[lastIndex].Name = r.Name
+		}
+	}
+
+	// double check
+	matedReads2 := []PairedEndRead{}
+	for _, r := range matedReads {
+		if r.ReadLeft != nil && r.ReadRight != nil {
+			matedReads2 = append(matedReads2, r)
+		}
+	}
+
+	return matedReads2
 }

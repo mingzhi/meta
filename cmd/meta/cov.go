@@ -28,10 +28,11 @@ type CovResult struct {
 
 type covGenomeFunc func(records meta.SamRecords, genome meta.Genome, maxl int, pos int) (*meta.KsCalculator, *meta.CovCalculator)
 
-type cmdCovGenome struct {
+type cmdCov struct {
 	workspace *string // workspace.
 	config    *string // configure file name.
 	prefix    *string // prefix of bacterial species.
+	ncpu      *int    // number of CPUs for using.
 
 	samout      string // sam output diretory.
 	outdir      string
@@ -44,14 +45,16 @@ type cmdCovGenome struct {
 	pos int // position in a codon to calculate.
 }
 
-func (cmd *cmdCovGenome) Flags(fs *flag.FlagSet) *flag.FlagSet {
+func (cmd *cmdCov) Flags(fs *flag.FlagSet) *flag.FlagSet {
 	cmd.config = fs.String("c", "config", "configure file name")
 	cmd.workspace = fs.String("w", "", "workspace")
 	cmd.prefix = fs.String("p", "", "prefix")
+	cmd.ncpu = fs.Int("cpu", runtime.NumCPU(), "Number of CPUs for using")
+
 	return fs
 }
 
-func (cmd *cmdCovGenome) init() {
+func (cmd *cmdCov) init() {
 	viper.SetConfigName(*cmd.config)
 	viper.AddConfigPath(*cmd.workspace)
 	viper.ReadInConfig()
@@ -70,9 +73,11 @@ func (cmd *cmdCovGenome) init() {
 		cmd.covFunc = meta.CovGenome
 		cmd.covFuncName = "CovGenome"
 	}
+
+	runtime.GOMAXPROCS(*cmd.ncpu)
 }
 
-func (cmd *cmdCovGenome) Run(args []string) {
+func (cmd *cmdCov) Run(args []string) {
 	cmd.init()
 	registerLogger()
 	// Load species map.
@@ -99,6 +104,10 @@ func (cmd *cmdCovGenome) Run(args []string) {
 				bamFileName := s.Path + ".align.bam"
 				bamFilePath := filepath.Join(cmd.samout, s.Path, bamFileName)
 				_, records := meta.ReadBamFile(bamFilePath)
+				if len(records) == 0 {
+					WARN.Printf("%s\t%s zero records\n", s.Path, genome.Accession)
+					continue
+				}
 
 				// Read postion profile for the genome.
 				posFileName := findRefAcc(genome.Accession) + ".pos"
@@ -150,7 +159,7 @@ func (cmd *cmdCovGenome) Run(args []string) {
 }
 
 // Boostrapping.
-func (cmd *cmdCovGenome) boostrapping(records meta.SamRecords, genome meta.Genome, pos int) chan CovResult {
+func (cmd *cmdCov) boostrapping(records meta.SamRecords, genome meta.Genome, pos int) chan CovResult {
 	ncpu := runtime.GOMAXPROCS(0)
 	c := make(chan CovResult)
 	jobs := make(chan int)
@@ -184,7 +193,7 @@ func (cmd *cmdCovGenome) boostrapping(records meta.SamRecords, genome meta.Genom
 }
 
 // Calculate covariance for records.
-func (cmd *cmdCovGenome) cov(records meta.SamRecords, genome meta.Genome, pos int) CovResult {
+func (cmd *cmdCov) cov(records meta.SamRecords, genome meta.Genome, pos int) CovResult {
 	kc, cc := cmd.covFunc(records, genome, cmd.maxl, pos)
 
 	cr := CovResult{}
