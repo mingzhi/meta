@@ -44,6 +44,9 @@ func GenomePosProfiling(strains []Strain, dir string) {
 				// Genetic code table, we need it for 4-fold codons.
 				gc := gcMap[s.GeneticCode]
 				for _, g := range s.Genomes {
+					if !strings.Contains(g.Replicon, "chromosome") {
+						continue
+					}
 					// Read genome sequence from fna file.
 					acc := findRefAcc(g.Accession)
 					fnaFileName := acc + ".fna"
