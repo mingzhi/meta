@@ -4,11 +4,13 @@ package main
 // by mapping reads to it.
 
 import (
+	"bufio"
 	"encoding/json"
 	"flag"
 	"fmt"
 	"github.com/mingzhi/meta"
 	"github.com/spf13/viper"
+	"io"
 	"log"
 	"math"
 	"math/rand"
@@ -41,6 +43,7 @@ type cmdCov struct {
 	bootstrap   int           // number of bootstraps.
 	covFunc     covGenomeFunc // cov calculate function.
 	covFuncName string        // cov calculate function name.
+	strainFile  string        // strain file name.
 
 	pos int // position in a codon to calculate.
 }
@@ -74,6 +77,10 @@ func (cmd *cmdCov) init() {
 		cmd.covFuncName = "CovGenome"
 	}
 
+	if *cmd.prefix == "" {
+		cmd.strainFile = viper.GetString("strains")
+	}
+
 	runtime.GOMAXPROCS(*cmd.ncpu)
 }
 
@@ -85,9 +92,9 @@ func (cmd *cmdCov) Run(args []string) {
 	speciesMap := meta.ReadSpeciesMap(speciesMapFileName)
 	// Find the wanted species,
 	// stop if it could not find.
-	strains, found := speciesMap[*cmd.prefix]
-	if !found {
-		log.Fatalf("Can not find strain information for %s from species_map.json\n",
+	strains := cmd.getStrains(speciesMap)
+	if len(strains) == 0 {
+		log.Fatalf("Did not find any strain for %s from species_map.json\n",
 			*cmd.prefix)
 	}
 
@@ -131,7 +138,7 @@ func (cmd *cmdCov) Run(args []string) {
 				for _, pos := range positions {
 					cr := cmd.cov(records, genome, pos)
 
-					filePrefix := fmt.Sprintf("%s_%s_pos%d", cmd.covFuncName, s.Path, pos)
+					filePrefix := fmt.Sprintf("%s_%s_pos%d", s.Path, cmd.covFuncName, pos)
 
 					if !math.IsNaN(cr.VarKs) {
 						save2Json(cr, filepath.Join(*cmd.workspace, cmd.outdir, filePrefix+".json"))
@@ -228,6 +235,54 @@ func (cmd *cmdCov) cov(records meta.SamRecords, genome meta.Genome, pos int) Cov
 	}
 
 	return cr
+}
+
+// Obtain strains.
+func (cmd *cmdCov) getStrains(m map[string][]meta.Strain) (strains []meta.Strain) {
+	sM := make(map[string]meta.Strain)
+	for _, strains := range m {
+		for _, s := range strains {
+			sM[s.Path] = s
+		}
+	}
+
+	if cmd.strainFile != "" {
+		f, err := os.Open(cmd.strainFile)
+		if err != nil {
+			log.Fatalf("Cannot open file: %s\n", cmd.strainFile)
+		}
+		defer f.Close()
+
+		r := bufio.NewReader(f)
+		prefixes := []string{}
+		for {
+			line, err := r.ReadString('\n')
+			if err != nil {
+				if err != io.EOF {
+					log.Panic(err)
+				}
+				break
+			}
+
+			prefix := strings.TrimSpace(line)
+			prefixes = append(prefixes, prefix)
+		}
+
+		for _, p := range prefixes {
+			s, found := sM[p]
+			if found {
+				strains = append(strains, s)
+			}
+		}
+	} else {
+		strains, _ = m[*cmd.prefix]
+		s, found := sM[*cmd.prefix]
+		if found {
+			strains = append(strains, s)
+		}
+	}
+
+	return
 }
 
 // Sample with replacement.
