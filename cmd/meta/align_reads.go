@@ -2,59 +2,21 @@ package main
 
 import (
 	"bytes"
-	"flag"
 	"github.com/mingzhi/meta"
-	"github.com/spf13/viper"
 	"log"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strconv"
 )
 
 // Command for mapping reads to reference genomes.
 type cmdAlignReads struct {
-	workspace *string // workspace.
-	config    *string // configure file name.
-
-	refBase            string // reference genome folder.
-	strainFileName     string // strain file name.
-	pairedEndReadFile1 string // paired-end read file 1.
-	pairedEndReadFile2 string // paired-end read file 2.
-	ncpu               int    // number of CPUs for using.
-	bowtieThreadsNum   int    // bowtie threads number.
-	samOutBase         string // sam output folder.
-}
-
-// Register flags.
-func (cmd *cmdAlignReads) Flags(fs *flag.FlagSet) *flag.FlagSet {
-	cmd.workspace = fs.String("w", "", "workspace")
-	cmd.config = fs.String("c", "config", "configure file name")
-	return fs
-}
-
-// Initialize.
-func (cmd *cmdAlignReads) Init() {
-	// Register viper for configurations.
-	viper.SetConfigName(*cmd.config)
-	viper.AddConfigPath(*cmd.workspace)
-	viper.ReadInConfig()
-
-	// Read settings.
-	cmd.refBase = viper.GetString("Reference_Genome_Directory")
-	cmd.strainFileName = viper.GetString("Strain_File_Name")
-	cmd.pairedEndReadFile1 = viper.GetString("Paired_End_Reads_1")
-	cmd.pairedEndReadFile2 = viper.GetString("Paired_End_Reads_2")
-	cmd.bowtieThreadsNum = viper.GetInt("Bowtie_Threads_Num")
-	cmd.samOutBase = viper.GetString("Sam_Output_Diretory")
-	if cmd.bowtieThreadsNum <= 0 {
-		cmd.bowtieThreadsNum = 1
-	}
-	cmd.ncpu = runtime.GOMAXPROCS(0)
+	cmdConfig // embedded cmdConfig.
 }
 
 func (cmd *cmdAlignReads) Run(args []string) {
-	cmd.Init()
+	// Parse configure and settings.
+	cmd.ParseConfig()
 	// Read strain information.
 	strainFilePath := filepath.Join(*cmd.workspace, cmd.strainFileName)
 	strains := meta.ReadStrains(strainFilePath)
@@ -70,7 +32,7 @@ func (cmd *cmdAlignReads) Run(args []string) {
 	// Create cmd.ncpu workers for aligning.
 	// send done signal when the job is done.
 	done := make(chan bool)
-	for i := 0; i < cmd.ncpu; i++ {
+	for i := 0; i < *cmd.ncpu; i++ {
 		go func() {
 			for strain := range jobs {
 				cmd.align(strain)
@@ -80,7 +42,7 @@ func (cmd *cmdAlignReads) Run(args []string) {
 	}
 
 	// Waiting for workers.
-	for i := 0; i < cmd.ncpu; i++ {
+	for i := 0; i < *cmd.ncpu; i++ {
 		<-done
 	}
 }

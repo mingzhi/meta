@@ -2,71 +2,44 @@ package main
 
 import (
 	"encoding/json"
-	"flag"
 	"github.com/mingzhi/meta"
-	"github.com/spf13/viper"
-	"log"
 	"os"
 	"path/filepath"
 )
 
-// Initialze project.
 // Create a species_map.json.
-
+// If a prefix is given, generate a json file
+// for a list of strains.
 type cmdInit struct {
-	workspace *string // workspace.
-	config    *string // configure file name.
-	prefix    *string // prefix of the species.
-
-	refBase string // reference genome diretory.
-	taxBase string // taxonomy database diretory.
-}
-
-func (cmd *cmdInit) Flags(fs *flag.FlagSet) *flag.FlagSet {
-	cmd.config = fs.String("c", "config", "configure file name")
-	cmd.workspace = fs.String("w", "", "workspace")
-	cmd.prefix = fs.String("p", "", "prefix")
-
-	return fs
-}
-
-func (cmd *cmdInit) init() {
-	viper.SetConfigName(*cmd.config)
-	viper.AddConfigPath(*cmd.workspace)
-	viper.ReadInConfig()
-
-	cmd.refBase = viper.GetString("Reference_Genome_Directory")
-	cmd.taxBase = viper.GetString("Taxonomy_Diretory")
-
-	// register logger for meta package.
-	registerLogger()
+	cmdConfig // embed cmdConfig
 }
 
 func (cmd *cmdInit) Run(args []string) {
-	cmd.init()
+	// Parse config and settings.
+	cmd.ParseConfig()
 	var strains []meta.Strain
 	if cmd.isSpeciesMapExist() {
 		f, err := os.Open(filepath.Join(*cmd.workspace, "reference_strains.json"))
 		if err != nil {
-			log.Panic(err)
+			ERROR.Fatalln(err)
 		}
 		defer f.Close()
 		decoder := json.NewDecoder(f)
 		err = decoder.Decode(&strains)
 		if err != nil {
-			log.Panic(err)
+			ERROR.Fatalln(err)
 		}
 	} else {
 		strains = meta.GenerateStrainInfors(*cmd.workspace, cmd.refBase, cmd.taxBase)
 		w, err := os.Create(filepath.Join(*cmd.workspace, "reference_strains.json"))
 		if err != nil {
-			log.Panic(err)
+			ERROR.Fatalln(err)
 		}
 		defer w.Close()
 		encoder := json.NewEncoder(w)
 		err = encoder.Encode(strains)
 		if err != nil {
-			log.Panic(err)
+			ERROR.Fatalln(err)
 		}
 	}
 
@@ -77,22 +50,22 @@ func (cmd *cmdInit) Run(args []string) {
 		}
 	}
 
-	ss, found := speciesMap[*cmd.prefix]
+	ss, found := speciesMap[cmd.prefix]
 	if found {
-		fileName := filepath.Join(*cmd.workspace, *cmd.prefix+"_strains.json")
+		fileName := filepath.Join(*cmd.workspace, cmd.prefix+"_strains.json")
 		w, err := os.Create(fileName)
 		if err != nil {
-			log.Panic(err)
+			ERROR.Fatalln(err)
 		}
 		defer w.Close()
 
 		encoder := json.NewEncoder(w)
 		err = encoder.Encode(ss)
 		if err != nil {
-			log.Panic(err)
+			ERROR.Fatalln(err)
 		}
 	} else {
-		log.Printf("Cannot find strains for %s\n", *cmd.prefix)
+		WARN.Printf("Cannot find strains for %s\n", cmd.prefix)
 	}
 }
 
@@ -102,16 +75,16 @@ func (cmd *cmdInit) isSpeciesMapExist() (isExist bool) {
 		if os.IsNotExist(err) {
 			isExist = false
 		} else {
-			log.Panic(err)
+			ERROR.Fatalln(err)
 		}
 	} else {
 		summaryFile := filepath.Join(cmd.refBase, "summary.txt")
 		fi2, err := os.Stat(summaryFile)
 		if err != nil {
 			if os.IsNotExist(err) {
-				log.Fatalln("Cannot find summary.txt in reference genome directory!")
+				ERROR.Fatalln("Cannot find summary.txt in reference genome directory!")
 			} else {
-				log.Panic(err)
+				ERROR.Fatalln(err)
 			}
 		} else {
 			if fi1.ModTime().After(fi2.ModTime()) {

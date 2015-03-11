@@ -18,23 +18,26 @@ var (
 	DefaultMaxProcs = runtime.NumCPU()
 	INFO            *log.Logger
 	WARN            *log.Logger
+	ERROR           *log.Logger
 )
 
 func main() {
 	runtime.GOMAXPROCS(DefaultMaxProcs)
+	registerLogger()
 	// Register loggers.
 	INFO = log.New(os.Stdout, "INFO: ", log.Ldate|log.Ltime|log.Lshortfile)
 	WARN = log.New(os.Stdout, "WARN: ", log.Ldate|log.Ltime|log.Lshortfile)
+	ERROR = log.New(os.Stderr, "ERROR:", log.Ldate|log.Ltime|log.Lshortfile)
 	// Register commands.
 	command.On("init", "initialize", &cmdInit{}, []string{})
 	command.On("makeudb", "make usearch db", &makeUdbCmd{}, []string{})
-	command.On("orthomcl", "OrthoMCL", &ortholMclCmd{}, []string{})
-	command.On("orthoaln", "align orthologs", &alignOrthologCmd{}, []string{})
+	command.On("orthomcl", "OrthoMCL", &cmdOrthoMCL{}, []string{})
+	command.On("orthoaln", "align orthologs", &cmdOrthoAln{}, []string{})
 	command.On("readanchor", "read anchor", &readAnchorCmd{}, []string{})
 	command.On("profile", "calculate position profile for a referenc genome",
 		&cmdProfile{}, []string{})
-	command.On("cov", "calculate cov for reads mapped to a reference genome",
-		&cmdCov{}, []string{})
+	command.On("cov_reads", "calculate cov for reads mapped to a reference genome",
+		&cmdCovReads{}, []string{})
 	command.On("index", "build bowtie2 index", &cmdIndex{}, []string{})
 	command.On("align_reads", "align reads using bowtie2", &cmdAlignReads{}, []string{})
 	// Parse and run commands.
