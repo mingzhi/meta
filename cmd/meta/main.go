@@ -35,6 +35,7 @@ func main() {
 		&cmdProfile{}, []string{})
 	command.On("cov", "calculate cov for reads mapped to a reference genome",
 		&cmdCov{}, []string{})
+	command.On("index", "build bowtie2 index", &cmdIndex{}, []string{})
 	// Parse and run commands.
 	command.ParseAndRun()
 }

@@ -6,7 +6,6 @@ import (
 	"log"
 	"os"
 	"path/filepath"
-	"regexp"
 	"runtime"
 	"strings"
 )
@@ -48,7 +47,7 @@ func GenomePosProfiling(strains []Strain, dir string) {
 						continue
 					}
 					// Read genome sequence from fna file.
-					acc := findRefAcc(g.Accession)
+					acc := FindRefAcc(g.Accession)
 					fnaFileName := acc + ".fna"
 					fnaFilePath := filepath.Join(sDir, fnaFileName)
 					genomeSeq := readFasta(fnaFilePath)[0].Seq
@@ -116,11 +115,6 @@ func GenomePosProfiling(strains []Strain, dir string) {
 	for i := 0; i < ncpu; i++ {
 		<-done
 	}
-}
-
-func findRefAcc(name string) string {
-	re := regexp.MustCompile("NC_\\d+")
-	return re.FindString(name)
 }
 
 func readFasta(fileName string) []*seq.Sequence {

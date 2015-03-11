@@ -5,6 +5,7 @@ import (
 	"github.com/mingzhi/ncbiutils"
 	"log"
 	"os"
+	"regexp"
 )
 
 func ReadSpeciesMap(fileName string) map[string][]Strain {
@@ -39,4 +40,27 @@ func ReadAlignments(fileName string) []ncbiutils.SeqRecords {
 	}
 
 	return records
+}
+
+// Read strain information from a json file.
+func ReadStrains(fileName string) (strains []Strain) {
+	f, err := os.Open(fileName)
+	if err != nil {
+		log.Panic(err)
+	}
+	defer f.Close()
+
+	decoder := json.NewDecoder(f)
+	err = decoder.Decode(&strains)
+	if err != nil {
+		log.Panic(err)
+	}
+
+	return
+}
+
+// Find and clean reference genome accession.
+func FindRefAcc(name string) string {
+	re := regexp.MustCompile("NC_\\d+")
+	return re.FindString(name)
 }

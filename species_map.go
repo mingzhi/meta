@@ -2,7 +2,6 @@ package meta
 
 import (
 	"encoding/csv"
-	"encoding/json"
 	"github.com/mingzhi/ncbiutils"
 	"io/ioutil"
 	"log"
@@ -35,12 +34,12 @@ var (
 	Warn *log.Logger
 )
 
-// GennerateSpeciesMap:
-// generates a species map file and store it into workspace.
+// GenerateStrainInfors:
+// generates strain informations.
 // workspace: output dir
 // ref: reference genome folder.
 // tax: taxonomy ftp folder.
-func GenerateSpeciesMap(workspace, ref, tax string) {
+func GenerateStrainInfors(workspace, ref, tax string) (strains []Strain) {
 
 	records := readSummary(ref)
 
@@ -86,30 +85,12 @@ func GenerateSpeciesMap(workspace, ref, tax string) {
 		}
 	}
 
-	speciesMap := make(map[string][]Strain)
 	for _, s := range strainMap {
-		if s.Species != "" {
-			species := strings.Replace(s.Species, " ", "_", -1)
-			speciesMap[species] = append(speciesMap[species], s)
-		}
+		s.Species = strings.Replace(s.Species, " ", "_", -1)
+		strains = append(strains, s)
 	}
 
-	// save to a json file.
-	outFileName := "species_map.json"
-	outFilePath := filepath.Join(workspace, outFileName)
-	w, err := os.Create(outFilePath)
-	if err != nil {
-		log.Panic(err)
-	}
-	defer w.Close()
-
-	ec := json.NewEncoder(w)
-	err = ec.Encode(speciesMap)
-	if err != nil {
-		log.Panic(err)
-	}
-
-	Info.Printf("Total %d species.\n", len(speciesMap))
+	return
 }
 
 type Record struct {

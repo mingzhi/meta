@@ -24,7 +24,7 @@ func CovGenome(records SamRecords, genome Genome, maxl, pos int) (kc *KsCalculat
 	go func() {
 		for _, r := range matedReads {
 			sameRef := r.ReadLeft.Ref.Name() == r.ReadRight.Ref.Name()
-			matchRef := findRefAcc(r.ReadLeft.Ref.Name()) == findRefAcc(genome.Accession)
+			matchRef := FindRefAcc(r.ReadLeft.Ref.Name()) == FindRefAcc(genome.Accession)
 			if sameRef && matchRef {
 				jobs <- job{r}
 			}
@@ -109,7 +109,7 @@ func CovReads(records SamRecords, genome Genome, maxl, pos int) (kc *KsCalculato
 	founds := PairedEndReads{}
 	maxReadLength := 0
 	for _, r := range matedReads {
-		if findRefAcc(r.ReadLeft.Ref.Name()) == findRefAcc(genome.Accession) {
+		if FindRefAcc(r.ReadLeft.Ref.Name()) == FindRefAcc(genome.Accession) {
 			founds = append(founds, r)
 			readLen := r.ReadRight.Pos + r.ReadRight.Len() - r.ReadLeft.Pos
 			if maxReadLength < readLen {
