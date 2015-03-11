@@ -36,6 +36,7 @@ func main() {
 	command.On("cov", "calculate cov for reads mapped to a reference genome",
 		&cmdCov{}, []string{})
 	command.On("index", "build bowtie2 index", &cmdIndex{}, []string{})
+	command.On("align_reads", "align reads using bowtie2", &cmdAlignReads{}, []string{})
 	// Parse and run commands.
 	command.ParseAndRun()
 }
