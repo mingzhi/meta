@@ -17,7 +17,7 @@ type cmdOrthoAln struct {
 func (cmd *cmdOrthoAln) Run(args []string) {
 	// Parse config and settings.
 	cmd.ParseConfig()
-	MakeDir(cmd.orthoOutBase)
+	MakeDir(filepath.Join(*cmd.workspace, cmd.orthoOutBase))
 
 	// Read ortholog groups.
 	groups := cmd.ReadOrhtologs()

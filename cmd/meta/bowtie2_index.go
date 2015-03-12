@@ -20,7 +20,6 @@ func (cmd *cmdIndex) Run(args []string) {
 	// Parse configure and settings.
 	cmd.ParseConfig()
 	// Read strain information.
-	INFO.Println(cmd.strainFileName)
 	strainFilePath := filepath.Join(*cmd.workspace, cmd.strainFileName)
 	strains := meta.ReadStrains(strainFilePath)
 	// For each strain,

@@ -20,7 +20,7 @@ type cmdCovGenomes struct {
 func (cmd *cmdCovGenomes) Run(args []string) {
 	// Parse config and settings.
 	cmd.ParseConfig()
-	MakeDir(cmd.covOutBase)
+	MakeDir(filepath.Join(*cmd.workspace, cmd.covOutBase))
 
 	// Read strain information.
 	strainFilePath := filepath.Join(*cmd.workspace, cmd.strainFileName)

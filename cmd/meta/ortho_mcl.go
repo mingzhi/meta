@@ -18,7 +18,7 @@ type cmdOrthoMCL struct {
 func (cmd *cmdOrthoMCL) Run(args []string) {
 	// Parse config and settings.
 	cmd.ParseConfig()
-	MakeDir(cmd.orthoOutBase)
+	MakeDir(filepath.Join(*cmd.workspace, cmd.orthoOutBase))
 
 	// Read strain information.
 	strainFilePath := filepath.Join(*cmd.workspace, cmd.strainFileName)

@@ -17,7 +17,7 @@ type cmdAlignReads struct {
 func (cmd *cmdAlignReads) Run(args []string) {
 	// Parse configure and settings.
 	cmd.ParseConfig()
-	MakeDir(cmd.samOutBase)
+	MakeDir(filepath.Join(*cmd.workspace, cmd.samOutBase))
 	// Read strain information.
 	strainFilePath := filepath.Join(*cmd.workspace, cmd.strainFileName)
 	strains := meta.ReadStrains(strainFilePath)
