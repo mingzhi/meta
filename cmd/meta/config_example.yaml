@@ -1,0 +1,44 @@
+# Genome Data Info.
+#  reference: reference genome folder.
+#  taxonomy: taxonomy database folder.
+genome:
+ reference: "/Volumes/G-DRIVE/NCBI/genomes/Bacteria"
+ taxonomy: "/Volumes/G-DRIVE/NCBI/pub/taxonomy"
+
+# Species Info.
+#  name: species prefix.
+#  file: strain file.
+species:
+ name: "Streptococcus_pneumoniae"
+ file: "Streptococcus_pneumoniae_strains.json"
+
+# Reads Data Info.
+#  paired1: paired end reads file 1.
+#  paired2: paired end reads file 2.
+reads:
+ paired1: "HMIWGS/SRS015055/SRS015055.denovo_duplicates_marked.trimmed.1.fastq"
+ paired2: "HMIWGS/SRS015055/SRS015055.denovo_duplicates_marked.trimmed.2.fastq"
+
+# Output Diretories.
+#  cov: correlation results output folder.
+#  sam: read mapping results output folder.
+#  ortho: orthologs and alignments output folder.
+out:
+ cov: "cov_output"
+ sam: "sam_output"
+ ortho: "ortho_output"
+
+# Correlation Analysis Parameters.
+#  maxl: max length of correlation to be calculated.
+#  func: cov function to calculated for reads.
+#  positions: positions to be calculated.
+cov:
+ maxl: 600
+ func: "Cov_Reads_vs_Genome"
+ positions:
+  - 4
+
+# Bowtie2 Options.
+#  threads: number of threads to be used in bowtie2.
+bowtie2:
+ threads: 1

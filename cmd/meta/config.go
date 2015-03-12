@@ -2,9 +2,10 @@ package main
 
 import (
 	"flag"
-	"github.com/spf13/viper"
+	"github.com/jacobstr/confer"
 	"runtime"
 	"strconv"
+	"strings"
 )
 
 // Config to read flags and configure file.
@@ -38,34 +39,38 @@ type cmdConfig struct {
 
 func (cmd *cmdConfig) Flags(fs *flag.FlagSet) *flag.FlagSet {
 	cmd.workspace = fs.String("w", "", "workspace.")
-	cmd.config = fs.String("c", "config", "configure file name.")
+	cmd.config = fs.String("c", "config.yaml", "configure files in YAML format, which are separeted by comma.")
 	cmd.ncpu = fs.Int("ncpu", runtime.NumCPU(), "number of CPUs for using.")
 	return fs
 }
 
 // Parse configs.
 func (cmd *cmdConfig) ParseConfig() {
-	// Register viper for configurations.
-	viper.SetConfigName(*cmd.config)
-	viper.AddConfigPath(*cmd.workspace)
-	viper.ReadInConfig()
+	// Use confer package to parse configure files.
+	config := confer.NewConfig()
+	// Set root path, which contains configure files.
+	config.SetRootPath(*cmd.workspace)
+	// Read configure files.
+	configPaths := strings.Split(*cmd.config, ",")
+	if err := config.ReadPaths(configPaths...); err != nil {
+		ERROR.Fatalln(err)
+	}
+	// Automatic binding.
+	config.AutomaticEnv()
+	cmd.refBase = config.GetString("genome.reference")
+	cmd.taxBase = config.GetString("genome.taxonomy")
+	cmd.prefix = config.GetString("species.name")
+	cmd.strainFileName = config.GetString("species.file")
+	cmd.pairedEndReadFile1 = config.GetString("reads.paired1")
+	cmd.pairedEndReadFile2 = config.GetString("reads.paired2")
+	cmd.covOutBase = config.GetString("out.cov")
+	cmd.samOutBase = config.GetString("out.sam")
+	cmd.orthoOutBase = config.GetString("out.ortho")
+	cmd.maxl = config.GetInt("cov.maxl")
+	cmd.covReadsFuncName = config.GetString("cov.func")
+	cmd.bowtieThreadsNum = config.GetInt("bowtie2.threads")
 
-	// Read settings.
-	cmd.refBase = viper.GetString("Reference_Genome_Directory")
-	cmd.taxBase = viper.GetString("Taxonomy_Diretory")
-	cmd.strainFileName = viper.GetString("Strain_File_Name")
-	cmd.pairedEndReadFile1 = viper.GetString("Paired_End_Reads_1")
-	cmd.pairedEndReadFile2 = viper.GetString("Paired_End_Reads_2")
-	cmd.bowtieThreadsNum = viper.GetInt("Bowtie_Threads_Num")
-	cmd.samOutBase = viper.GetString("Sam_Output_Diretory")
-
-	cmd.orthoOutBase = viper.GetString("Ortholog_Output_Diretory")
-	cmd.prefix = viper.GetString("Prefix")
-
-	cmd.covReadsFuncName = viper.GetString("Cov_Reads_Func_Name")
-	cmd.covOutBase = viper.GetString("Cov_Output_Directory")
-	cmd.maxl = viper.GetInt("Cov_Max_Length")
-	positions := viper.GetStringSlice("Positions")
+	positions := config.GetStringSlice("cov.positions")
 	for _, p := range positions {
 		pos, err := strconv.Atoi(p)
 		if err != nil {
