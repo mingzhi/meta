@@ -3,7 +3,6 @@ package main
 import (
 	"bytes"
 	"github.com/mingzhi/meta"
-	"log"
 	"os/exec"
 	"path/filepath"
 	"strconv"
@@ -103,7 +102,7 @@ func (cmd *cmdAlignReads) align(strain meta.Strain) {
 	command.Stdout = stdout
 	err := command.Run()
 	if err != nil {
-		log.Println(string(stdout.Bytes()))
-		log.Fatalln(string(stderr.Bytes()))
+		ERROR.Println(string(stdout.Bytes()))
+		ERROR.Fatalln(string(stderr.Bytes()))
 	}
 }

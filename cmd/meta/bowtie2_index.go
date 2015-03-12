@@ -5,7 +5,6 @@ import (
 	"flag"
 	"github.com/mingzhi/meta"
 	"github.com/spf13/viper"
-	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -91,7 +90,7 @@ func isBowtieIndexExist(strain meta.Strain, refDir string) (isExist bool) {
 		if os.IsNotExist(err) {
 			isExist = false
 		} else {
-			log.Panic(err)
+			ERROR.Fatalln(err)
 		}
 	} else {
 		// Get modified time for index,
@@ -105,7 +104,7 @@ func isBowtieIndexExist(strain meta.Strain, refDir string) (isExist bool) {
 			genomeFastaPath := filepath.Join(refDir, strain.Path,
 				genomeFastaName)
 			if fi, err := os.Stat(genomeFastaPath); err != nil {
-				log.Panic(err)
+				ERROR.Fatalln(err)
 			} else {
 				if maxFastaTime.Before(fi.ModTime()) {
 					maxFastaTime = fi.ModTime()
@@ -141,6 +140,6 @@ func bowtieBuildIndex(strain meta.Strain, refDir string) {
 	stderr := new(bytes.Buffer)
 	cmd.Stderr = stderr
 	if err := cmd.Run(); err != nil {
-		log.Panic(string(stderr.Bytes()))
+		ERROR.Fatalln(string(stderr.Bytes()))
 	}
 }

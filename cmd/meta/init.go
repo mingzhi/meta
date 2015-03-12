@@ -17,6 +17,10 @@ type cmdInit struct {
 func (cmd *cmdInit) Run(args []string) {
 	// Parse config and settings.
 	cmd.ParseConfig()
+
+	// If there is no file containing strain informations,
+	// or the one is older than summary.txt,
+	// create a new one.
 	var strains []meta.Strain
 	if cmd.isSpeciesMapExist() {
 		f, err := os.Open(filepath.Join(*cmd.workspace, "reference_strains.json"))
@@ -43,6 +47,7 @@ func (cmd *cmdInit) Run(args []string) {
 		}
 	}
 
+	// Create a specie: []strain map.
 	speciesMap := make(map[string][]meta.Strain)
 	for _, s := range strains {
 		if s.Species != "" {
@@ -50,6 +55,7 @@ func (cmd *cmdInit) Run(args []string) {
 		}
 	}
 
+	// Find strains of the species.
 	ss, found := speciesMap[cmd.prefix]
 	if found {
 		fileName := filepath.Join(*cmd.workspace, cmd.prefix+"_strains.json")
@@ -69,6 +75,9 @@ func (cmd *cmdInit) Run(args []string) {
 	}
 }
 
+// Check if there exists a file containing strain information.
+// If exists, also check the modified time, which should be
+// after that of summary.txt.
 func (cmd *cmdInit) isSpeciesMapExist() (isExist bool) {
 	filePath := filepath.Join(*cmd.workspace, "reference_strains.json")
 	if fi1, err := os.Stat(filePath); err != nil {

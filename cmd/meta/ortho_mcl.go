@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"github.com/mingzhi/meta"
 	"github.com/mingzhi/ncbiutils"
-	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -41,7 +40,7 @@ func (cmd *cmdOrthoMCL) writeClusters(clusters [][]string) {
 	filePath := filepath.Join(*cmd.workspace, cmd.orthoOutBase, fileName)
 	f, err := os.Create(filePath)
 	if err != nil {
-		log.Panic(err)
+		ERROR.Fatalln(err)
 	}
 	defer f.Close()
 
@@ -55,13 +54,13 @@ func (cmd *cmdOrthoMCL) writeOrthologs(groups []ncbiutils.SeqRecords) {
 	filePath := filepath.Join(*cmd.workspace, cmd.orthoOutBase, fileName)
 	w, err := os.Create(filePath)
 	if err != nil {
-		log.Panic(err)
+		ERROR.Fatalln(err)
 	}
 	defer w.Close()
 
 	encoder := json.NewEncoder(w)
 	err = encoder.Encode(groups)
 	if err != nil {
-		log.Panic(err)
+		ERROR.Fatalln(err)
 	}
 }

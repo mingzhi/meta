@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/mingzhi/meta"
-	"log"
 	"math"
 	"os"
 	"path/filepath"
@@ -145,7 +144,7 @@ func isSamFileExist(filePath string) (isExist bool) {
 			WARN.Printf("%s does not exist!\n", filePath)
 			isExist = false
 		} else {
-			log.Panicln(err)
+			ERROR.Fatalln(err)
 		}
 	} else {
 		isExist = true
@@ -158,12 +157,12 @@ func isSamFileExist(filePath string) (isExist bool) {
 func save2Json(cr CovResult, fileName string) {
 	f, err := os.Create(fileName)
 	if err != nil {
-		log.Panic(err)
+		ERROR.Fatalln(err)
 	}
 	defer f.Close()
 
 	ec := json.NewEncoder(f)
 	if err := ec.Encode(cr); err != nil {
-		log.Panic(err)
+		ERROR.Fatalln(err)
 	}
 }

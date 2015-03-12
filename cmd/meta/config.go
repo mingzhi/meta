@@ -3,7 +3,6 @@ package main
 import (
 	"flag"
 	"github.com/spf13/viper"
-	"log"
 	"runtime"
 	"strconv"
 )
@@ -70,7 +69,7 @@ func (cmd *cmdConfig) ParseConfig() {
 	for _, p := range positions {
 		pos, err := strconv.Atoi(p)
 		if err != nil {
-			log.Fatalf("Can not convert %s to integer!", p)
+			ERROR.Fatalf("Can not convert %s to integer!", p)
 		}
 		cmd.positions = append(cmd.positions, pos)
 	}
