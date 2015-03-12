@@ -92,7 +92,7 @@ func (cmd *cmdAlignReads) align(strain meta.Strain) {
 	options = append(options, []string{"-p", threadsNum}...)
 
 	genomeIndexBase := filepath.Join(cmd.refBase, strain.Path, strain.Path)
-	samOutFilePath := filepath.Join(cmd.samOutBase, strain.Path+".sam")
+	samOutFilePath := filepath.Join(*cmd.workspace, cmd.samOutBase, strain.Path+".sam")
 	options = append(options, []string{"-x", genomeIndexBase}...)
 	options = append(options, []string{"-1", cmd.pairedEndReadFile1}...)
 	options = append(options, []string{"-2", cmd.pairedEndReadFile2}...)

@@ -47,7 +47,7 @@ func (cmd *cmdCovReads) Run(args []string) {
 			if isChromosome(genome.Replicon) {
 				// Read records of reads from a "sam" file.
 				samFileName := s.Path + ".sam"
-				samFilePath := filepath.Join(cmd.samOutBase, samFileName)
+				samFilePath := filepath.Join(*cmd.workspace, cmd.samOutBase, samFileName)
 				// Check if the "sam" file exists.
 				if isSamFileExist(samFilePath) {
 					_, records := meta.ReadSamFile(samFilePath)
