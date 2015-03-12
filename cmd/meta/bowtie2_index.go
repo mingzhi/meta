@@ -2,13 +2,10 @@ package main
 
 import (
 	"bytes"
-	"flag"
 	"github.com/mingzhi/meta"
-	"github.com/spf13/viper"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"time"
 )
@@ -16,37 +13,14 @@ import (
 // Indexing reference genome for efficiently read mapping.
 
 type cmdIndex struct {
-	workspace *string // workspace.
-	config    *string // configure file name.
-
-	refDir         string // reference genome folder.
-	strainFileName string // strain file name.
-	ncpu           int    // number of CPUs for using.
-}
-
-// Register flags.
-func (cmd *cmdIndex) Flags(fs *flag.FlagSet) *flag.FlagSet {
-	cmd.workspace = fs.String("w", "", "workspace")
-	cmd.config = fs.String("c", "config", "configure file name")
-	return fs
-}
-
-// Initialize.
-func (cmd *cmdIndex) Init() {
-	// Register viper for configurations.
-	viper.SetConfigName(*cmd.config)
-	viper.AddConfigPath(*cmd.workspace)
-	viper.ReadInConfig()
-
-	// Read settings.
-	cmd.refDir = viper.GetString("Reference_Genome_Directory")
-	cmd.strainFileName = viper.GetString("Strain_File_Name")
-	cmd.ncpu = runtime.GOMAXPROCS(0)
+	cmdConfig // embed cmdConfig.
 }
 
 func (cmd *cmdIndex) Run(args []string) {
-	cmd.Init()
+	// Parse configure and settings.
+	cmd.ParseConfig()
 	// Read strain information.
+	INFO.Println(cmd.strainFileName)
 	strainFilePath := filepath.Join(*cmd.workspace, cmd.strainFileName)
 	strains := meta.ReadStrains(strainFilePath)
 	// For each strain,
@@ -55,7 +29,7 @@ func (cmd *cmdIndex) Run(args []string) {
 	jobs := make(chan meta.Strain)
 	go func() {
 		for _, strain := range strains {
-			if isBowtieIndexExist(strain, cmd.refDir) {
+			if isBowtieIndexExist(strain, cmd.refBase) {
 				INFO.Printf("%s has already been indexed!\n", strain.Path)
 			} else {
 				jobs <- strain
@@ -67,16 +41,16 @@ func (cmd *cmdIndex) Run(args []string) {
 	// Create cmd.ncpu worker for building index,
 	// send done signal when the job is done.
 	done := make(chan bool)
-	for i := 0; i < cmd.ncpu; i++ {
+	for i := 0; i < *cmd.ncpu; i++ {
 		go func() {
 			for strain := range jobs {
-				bowtieBuildIndex(strain, cmd.refDir)
+				bowtieBuildIndex(strain, cmd.refBase)
 			}
 			done <- true
 		}()
 	}
 
-	for i := 0; i < cmd.ncpu; i++ {
+	for i := 0; i < *cmd.ncpu; i++ {
 		<-done
 	}
 }
