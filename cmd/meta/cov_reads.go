@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"github.com/mingzhi/meta"
 	"math"
@@ -9,14 +8,6 @@ import (
 	"path/filepath"
 	"strings"
 )
-
-type CovResult struct {
-	Ks, VarKs float64
-	Ct        []float64
-	CtIndices []int
-	CtN       []int
-	N         int
-}
 
 type covReadsFunc func(records meta.SamRecords,
 	genome meta.Genome, maxl, pos int) (kc *meta.KsCalculator, cc *meta.CovCalculator)
@@ -36,10 +27,10 @@ func (cmd *cmdCovReads) Run(args []string) {
 
 	// Assign cov read function.
 	switch cmd.covReadsFuncName {
-	case "CovReads":
-		cmd.covFunc = meta.CovReads
+	case "Cov_Reads_vs_Reads":
+		cmd.covFunc = meta.CovReadsReads
 	default:
-		cmd.covFunc = meta.CovGenome
+		cmd.covFunc = meta.CovReadsGenome
 	}
 
 	// Read strain information.
@@ -151,18 +142,4 @@ func isSamFileExist(filePath string) (isExist bool) {
 	}
 
 	return
-}
-
-// Save cov result to a json file.
-func save2Json(cr CovResult, fileName string) {
-	f, err := os.Create(fileName)
-	if err != nil {
-		ERROR.Fatalln(err)
-	}
-	defer f.Close()
-
-	ec := json.NewEncoder(f)
-	if err := ec.Encode(cr); err != nil {
-		ERROR.Fatalln(err)
-	}
 }

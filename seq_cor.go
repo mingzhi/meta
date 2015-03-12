@@ -1,17 +1,19 @@
 package meta
 
 import (
+	"github.com/mingzhi/ncbiutils"
 	"math"
 	"runtime"
 	"sort"
 )
 
-// Calculate total covariance for all mapped reads in a genome.
+// Calculate correlation of substituions in reads,
+// by comparing them to the reference genome.
 // records: SamRecords;
 // genome: Genome;
 // maxl: max length of correlations;
 // pos: positions to be calculated.
-func CovGenome(records SamRecords, genome Genome, maxl, pos int) (kc *KsCalculator, cc *CovCalculator) {
+func CovReadsGenome(records SamRecords, genome Genome, maxl, pos int) (kc *KsCalculator, cc *CovCalculator) {
 	// Obtain paired-end reads.
 	matedReads := GetPairedEndReads(records)
 	// Info.Printf("%s, paired end reads: %d\n", genome.Accession, len(matedReads))
@@ -53,28 +55,7 @@ func CovGenome(records SamRecords, genome Genome, maxl, pos int) (kc *KsCalculat
 					nucl := genome.Seq[start:end]
 					profile := genome.PosProfile[start:end]
 					subs := SubProfile(read, nucl, profile, pos)
-					// Info.Println("...")
-					// Info.Printf("%v\n", rec.Name)
-					// Info.Println(len(read))
-					// Info.Printf("%d\t%d\n", rec.ReadLeft.Len(), rec.ReadRight.Len())
-					// Info.Println(string(nucl))
-					// Info.Println(string(read))
-					// Info.Println("###")
-
-					for l := 0; l < maxl; l++ {
-						for i := 0; i < len(subs)-l; i++ {
-							x, y := subs[i], subs[i+l]
-							if !math.IsNaN(x) && !math.IsNaN(y) {
-								cc.Increment(l, x, y)
-							}
-
-							if l == 0 {
-								if !math.IsNaN(x) {
-									kc.Increment(x)
-								}
-							}
-						}
-					}
+					SubCorr(subs, cc, kc, maxl)
 				} else {
 					Warn.Printf("%d, %d, %d\n", rec.ReadLeft.Pos-1, rec.ReadLeft.Pos+len(read), len(genome.PosProfile))
 				}
@@ -98,12 +79,13 @@ func CovGenome(records SamRecords, genome Genome, maxl, pos int) (kc *KsCalculat
 	return
 }
 
-// Calculate total covariance amoung all mapped reads.
+// Calculate correlation of substituions in reads,
+// by comparing reads to reads.
 // records: SamRecords;
 // genome: Genome;
 // maxl: max length of correlations;
 // pos: postions to be calculated.
-func CovReads(records SamRecords, genome Genome, maxl, pos int) (kc *KsCalculator, cc *CovCalculator) {
+func CovReadsReads(records SamRecords, genome Genome, maxl, pos int) (kc *KsCalculator, cc *CovCalculator) {
 	// Obtain paired-end reads.
 	matedReads := GetPairedEndReads(records)
 	founds := PairedEndReads{}
@@ -207,6 +189,88 @@ func CovReads(records SamRecords, genome Genome, maxl, pos int) (kc *KsCalculato
 	return
 }
 
+// Calculate correlations of substituions in genomic sequences.
+func CovGenomes(alignments []ncbiutils.SeqRecords, genome Genome, maxl, pos int) (kc *KsCalculator, cc *CovCalculator) {
+	// Create job channel.
+	jobs := make(chan ncbiutils.SeqRecords)
+	go func() {
+		defer close(jobs)
+		for _, records := range alignments {
+			jobs <- records
+		}
+	}()
+
+	ncpu := runtime.GOMAXPROCS(0)
+
+	// Create result channel.
+	type result struct {
+		cc *CovCalculator
+		kc *KsCalculator
+	}
+	results := make(chan result)
+	for i := 0; i < ncpu; i++ {
+		go func() {
+			cc := NewCovCalculator(maxl, true)
+			kc := NewKsCalculator()
+			acc := FindRefAcc(genome.Accession)
+			for records := range jobs {
+				refRecords := ncbiutils.SeqRecords{}
+				for _, r := range records {
+					acc2 := FindRefAcc(r.Genome)
+					if acc == acc2 {
+						refRecords = append(refRecords, r)
+					}
+				}
+
+				for _, ref := range refRecords {
+					nucl := []byte{}
+					for _, b := range ref.Nucl {
+						if b != '-' {
+							nucl = append(nucl, b)
+						}
+					}
+					start := ref.Loc.From - 1
+					end := ref.Loc.To - 3 // stop codon!
+					prof := genome.PosProfile[start:end]
+
+					for _, r := range records {
+						if ref.Genome != r.Genome {
+							read := []byte{}
+							for _, b := range ref.Nucl {
+								if b != '-' {
+									read = append(read, b)
+								}
+							}
+
+							if len(prof) != len(nucl) || len(nucl) != len(read) {
+								Warn.Printf("%d\t%d\t%d\n", len(prof), len(nucl), len(read))
+							} else {
+								subs := SubProfile(read, nucl, prof, pos)
+								SubCorr(subs, cc, kc, maxl)
+							}
+						}
+					}
+				}
+			}
+			results <- result{cc, kc}
+		}()
+	}
+
+	// Receive results from the chan.
+	for i := 0; i < ncpu; i++ {
+		r := <-results
+		if i == 0 {
+			cc = r.cc
+			kc = r.kc
+		} else {
+			cc.Append(r.cc)
+			kc.Append(r.kc)
+		}
+	}
+
+	return
+}
+
 // Generate substitution profile according to the position profile.
 func SubProfile(read, nucl, profile []byte, pos int) []float64 {
 	// determine the codon position.
@@ -221,8 +285,9 @@ func SubProfile(read, nucl, profile []byte, pos int) []float64 {
 	case 4:
 		cp = FourFold
 	}
-	subs := make([]float64, len(profile))
-	for i, p := range profile {
+	subs := make([]float64, len(nucl))
+	for i := 0; i < len(subs); i++ {
+		p := profile[i]
 		var match bool
 		if cp == ThirdPos {
 			match = p == ThirdPos || p == FourFold
@@ -241,4 +306,22 @@ func SubProfile(read, nucl, profile []byte, pos int) []float64 {
 		}
 	}
 	return subs
+}
+
+// Calculate correlations of subsitutions.
+func SubCorr(subs []float64, cc *CovCalculator, kc *KsCalculator, maxl int) {
+	for l := 0; l < maxl; l++ {
+		for i := 0; i < len(subs)-l; i++ {
+			x, y := subs[i], subs[i+l]
+			if !math.IsNaN(x) && !math.IsNaN(y) {
+				cc.Increment(l, x, y)
+			}
+
+			if l == 0 {
+				if !math.IsNaN(x) {
+					kc.Increment(x)
+				}
+			}
+		}
+	}
 }

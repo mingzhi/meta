@@ -83,4 +83,5 @@ func (cmd *cmdConfig) ParseConfig() {
 	}
 
 	runtime.GOMAXPROCS(*cmd.ncpu)
+	registerLogger()
 }

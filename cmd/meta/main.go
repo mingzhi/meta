@@ -24,6 +24,7 @@ func main() {
 	command.On("ortho_mcl", "find orthologs using OrthoMCL", &cmdOrthoMCL{}, args)
 	command.On("ortho_aln", "align orthologs using MUSCLE", &cmdOrthoAln{}, args)
 	command.On("cov_reads", "calculate correlation of subsitutions in reads", &cmdCovReads{}, args)
+	command.On("cov_genomes", "calculate correlation of subsitutions in genomes", &cmdCovGenomes{}, args)
 	command.On("bowtie2_index", "build bowtie2 index", &cmdIndex{}, []string{})
 	command.On("bowtie2_align", "align reads using bowtie2", &cmdAlignReads{}, args)
 
