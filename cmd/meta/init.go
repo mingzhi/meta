@@ -14,6 +14,12 @@ type cmdInit struct {
 	cmdConfig // embed cmdConfig
 }
 
+// Run command.
+// It requires
+// 1. workspace;
+// 2. reference genome database folder;
+// 3. taxonomy database folder.
+// 4. species name.
 func (cmd *cmdInit) Run(args []string) {
 	// Parse config and settings.
 	cmd.ParseConfig()

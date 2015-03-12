@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strconv"
+	"strings"
 )
 
 // Command for mapping reads to reference genomes.
@@ -16,6 +17,7 @@ type cmdAlignReads struct {
 func (cmd *cmdAlignReads) Run(args []string) {
 	// Parse configure and settings.
 	cmd.ParseConfig()
+	MakeDir(cmd.samOutBase)
 	// Read strain information.
 	strainFilePath := filepath.Join(*cmd.workspace, cmd.strainFileName)
 	strains := meta.ReadStrains(strainFilePath)
@@ -102,6 +104,7 @@ func (cmd *cmdAlignReads) align(strain meta.Strain) {
 	command.Stdout = stdout
 	err := command.Run()
 	if err != nil {
+		ERROR.Println(strings.Join(options, " "))
 		ERROR.Println(string(stdout.Bytes()))
 		ERROR.Fatalln(string(stderr.Bytes()))
 	}
