@@ -236,9 +236,9 @@ func CovGenomes(alignments []ncbiutils.SeqRecords, genome Genome, maxl, pos int)
 					for _, r := range records {
 						if ref.Genome != r.Genome {
 							read := []byte{}
-							for _, b := range ref.Nucl {
+							for i, b := range ref.Nucl {
 								if b != '-' {
-									read = append(read, b)
+									read = append(read, r.Nucl[i])
 								}
 							}
 
