@@ -20,23 +20,23 @@ func (cmd *cmdOrthoMCL) Run(args []string) {
 	cmd.ParseConfig()
 	MakeDir(filepath.Join(*cmd.workspace, cmd.orthoOutBase))
 
-	// Read strain information.
-	strainFilePath := filepath.Join(*cmd.workspace, cmd.strainFileName)
-	strains := meta.ReadStrains(strainFilePath)
+	for prefix, strains := range cmd.speciesMap {
+		INFO.Printf("%s\n", prefix)
+		// OrthoMCL
+		clusters := meta.OrthoMCl(strains, cmd.refBase)
 
-	// OrthoMCL
-	clusters := meta.OrthoMCl(strains, cmd.refBase)
+		// Write clusters into a file.
+		cmd.writeClusters(prefix, clusters)
 
-	// Write clusters into a file.
-	cmd.writeClusters(clusters)
+		// Find ortholog sequences.
+		groups := meta.FindOrthologs(strains, cmd.refBase, clusters)
+		cmd.writeOrthologs(prefix, groups)
+	}
 
-	// Find ortholog sequences.
-	groups := meta.FindOrthologs(strains, cmd.refBase, clusters)
-	cmd.writeOrthologs(groups)
 }
 
-func (cmd *cmdOrthoMCL) writeClusters(clusters [][]string) {
-	fileName := cmd.prefix + ".mcl"
+func (cmd *cmdOrthoMCL) writeClusters(prefix string, clusters [][]string) {
+	fileName := prefix + ".mcl"
 	filePath := filepath.Join(*cmd.workspace, cmd.orthoOutBase, fileName)
 	f, err := os.Create(filePath)
 	if err != nil {
@@ -49,8 +49,8 @@ func (cmd *cmdOrthoMCL) writeClusters(clusters [][]string) {
 	}
 }
 
-func (cmd *cmdOrthoMCL) writeOrthologs(groups []ncbiutils.SeqRecords) {
-	fileName := cmd.prefix + "_orthologs.json"
+func (cmd *cmdOrthoMCL) writeOrthologs(prefix string, groups []ncbiutils.SeqRecords) {
+	fileName := prefix + "_orthologs.json"
 	filePath := filepath.Join(*cmd.workspace, cmd.orthoOutBase, fileName)
 	w, err := os.Create(filePath)
 	if err != nil {

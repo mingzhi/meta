@@ -6,6 +6,8 @@ import (
 	"runtime"
 )
 
+var GCMAP map[string]*ncbiutils.GeneticCode
+
 // Return sequence records for each ortholog clusters.
 func FindOrthologs(strains []Strain, dir string, clusters [][]string) []ncbiutils.SeqRecords {
 	// Load sequence records for each genome.
@@ -16,7 +18,7 @@ func FindOrthologs(strains []Strain, dir string, clusters [][]string) []ncbiutil
 			s := strains[i]
 			d := filepath.Join(dir, s.Path)
 			for _, g := range s.Genomes {
-				jobs <- []string{g.Accession, d}
+				jobs <- []string{g.Accession, d, s.GeneticCode}
 			}
 		}
 		close(jobs)
@@ -27,8 +29,8 @@ func FindOrthologs(strains []Strain, dir string, clusters [][]string) []ncbiutil
 	for i := 0; i < ncpu; i++ {
 		go func() {
 			for job := range jobs {
-				g, d := job[0], job[1]
-				records := ncbiutils.ReadSeqRecords(g, d)
+				g, d, gc := job[0], job[1], job[2]
+				records := ncbiutils.ReadSeqRecords(g, d, gc)
 				results <- records
 			}
 			done <- true

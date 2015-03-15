@@ -2,9 +2,11 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"github.com/mingzhi/meta"
 	"os"
 	"path/filepath"
+	"sort"
 )
 
 // Create a species_map.json.
@@ -61,23 +63,24 @@ func (cmd *cmdInit) Run(args []string) {
 		}
 	}
 
-	// Find strains of the species.
-	ss, found := speciesMap[cmd.prefix]
-	if found {
-		fileName := filepath.Join(*cmd.workspace, cmd.prefix+"_strains.json")
-		w, err := os.Create(fileName)
-		if err != nil {
-			ERROR.Fatalln(err)
-		}
-		defer w.Close()
+	speciesNames := []string{}
+	for name, _ := range speciesMap {
+		speciesNames = append(speciesNames, name)
+	}
 
-		encoder := json.NewEncoder(w)
-		err = encoder.Encode(ss)
-		if err != nil {
-			ERROR.Fatalln(err)
+	sort.Strings(speciesNames)
+	yamlFilePath := filepath.Join(*cmd.workspace, "reference_species.yaml")
+	w, err := os.Create(yamlFilePath)
+	if err != nil {
+		ERROR.Panicf("Cannot create file %s: %v", yamlFilePath, err)
+	}
+	defer w.Close()
+	for _, name := range speciesNames {
+		w.WriteString(fmt.Sprintf("%s:\n", name))
+		strains := speciesMap[name]
+		for _, s := range strains {
+			w.WriteString(fmt.Sprintf(" - %s\n", s.Path))
 		}
-	} else {
-		WARN.Printf("Cannot find strains for %s\n", cmd.prefix)
 	}
 }
 

@@ -2,7 +2,9 @@ package main
 
 import (
 	"bytes"
+	"fmt"
 	"github.com/mingzhi/meta"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strconv"
@@ -18,16 +20,16 @@ func (cmd *cmdAlignReads) Run(args []string) {
 	// Parse configure and settings.
 	cmd.ParseConfig()
 	MakeDir(filepath.Join(*cmd.workspace, cmd.samOutBase))
-	// Read strain information.
-	strainFilePath := filepath.Join(*cmd.workspace, cmd.strainFileName)
-	strains := meta.ReadStrains(strainFilePath)
+
 	// Map reads to each strain.
 	jobs := make(chan meta.Strain)
 	go func() {
-		for _, s := range strains {
-			jobs <- s
+		for _, strains := range cmd.speciesMap {
+			for _, s := range strains {
+				jobs <- s
+			}
+			close(jobs)
 		}
-		close(jobs)
 	}()
 
 	// Create cmd.ncpu workers for aligning.
@@ -92,20 +94,36 @@ func (cmd *cmdAlignReads) align(strain meta.Strain) {
 	options = append(options, []string{"-p", threadsNum}...)
 
 	genomeIndexBase := filepath.Join(cmd.refBase, strain.Path, strain.Path)
-	samOutFilePath := filepath.Join(*cmd.workspace, cmd.samOutBase, strain.Path+".sam")
+	outFilePrefix := filepath.Join(*cmd.workspace, cmd.samOutBase, strain.Path)
+	samOutFilePath := outFilePrefix + ".bowtie2_aligned.sam"
 	options = append(options, []string{"-x", genomeIndexBase}...)
 	options = append(options, []string{"-1", cmd.pairedEndReadFile1}...)
 	options = append(options, []string{"-2", cmd.pairedEndReadFile2}...)
 	options = append(options, []string{"-S", samOutFilePath}...)
+
+	// calculate min_score based on number of mismatches.
+	if cmd.maximumMismatchCount > 0 {
+		min_score := cmd.maximumMismatchCount * (-6)
+		options = append(options, []string{"--mp", "6,6"}...)
+		options = append(options, []string{"--np", "6"}...)
+		options = append(options, []string{"--score-min", fmt.Sprintf("L,%d,0.0", min_score)}...)
+		options = append(options, []string{"--gbar", "1000"}...)
+	}
+
 	command := exec.Command("bowtie2", options...)
 	stderr := new(bytes.Buffer)
-	stdout := new(bytes.Buffer)
 	command.Stderr = stderr
-	command.Stdout = stdout
-	err := command.Run()
+	logFilePath := outFilePrefix + ".bowtie2_aligned.log"
+	logFile, err := os.Create(logFilePath)
+	if err != nil {
+		ERROR.Printf("Cannot create %s: %v\n", logFilePath, err)
+	}
+	defer logFile.Close()
+	command.Stdout = logFile
+	err = command.Run()
 	if err != nil {
 		ERROR.Println(strings.Join(options, " "))
-		ERROR.Println(string(stdout.Bytes()))
+		ERROR.Println(err)
 		ERROR.Fatalln(string(stderr.Bytes()))
 	}
 }

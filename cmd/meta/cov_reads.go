@@ -25,60 +25,61 @@ func (cmd *cmdCovReads) Run(args []string) {
 	cmd.ParseConfig()
 	MakeDir(filepath.Join(*cmd.workspace, cmd.covOutBase))
 
-	// Assign cov read function.
-	switch cmd.covReadsFuncName {
-	case "Cov_Reads_vs_Reads":
-		cmd.covFunc = meta.CovReadsReads
-	default:
-		cmd.covFunc = meta.CovReadsGenome
-	}
+	for _, funcName := range cmd.covReadsFunctions {
+		// Assign cov read function.
+		switch funcName {
+		case "Cov_Reads_vs_Reads":
+			cmd.covFunc = meta.CovReadsReads
+		default:
+			cmd.covFunc = meta.CovReadsGenome
+		}
 
-	// Read strain information.
-	strainFilePath := filepath.Join(*cmd.workspace, cmd.strainFileName)
-	strains := meta.ReadStrains(strainFilePath)
+		for _, strains := range cmd.speciesMap {
+			// Make position profiles.
+			meta.GenomePosProfiling(strains, cmd.refBase)
 
-	// Make position profiles.
-	meta.GenomePosProfiling(strains, cmd.refBase)
+			// For each strain.
+			for _, s := range strains {
+				for _, genome := range s.Genomes {
+					// We only work on chromosome genomes.
+					if isChromosome(genome.Replicon) {
+						// Read records of reads from a "sam" file.
+						samFileName := s.Path + ".sam"
+						samFilePath := filepath.Join(*cmd.workspace, cmd.samOutBase, samFileName)
+						// Check if the "sam" file exists.
+						if isSamFileExist(samFilePath) {
+							_, records := meta.ReadSamFile(samFilePath)
+							if len(records) == 0 {
+								WARN.Printf("%s,%s has zero records\n", s.Path, genome.Accession)
+							} else {
+								// Read position profile for the genome.
+								posFileName := meta.FindRefAcc(genome.Accession) + ".pos"
+								posFilePath := filepath.Join(cmd.refBase, s.Path, posFileName)
+								genome.PosProfile = meta.ReadPosProfile(posFilePath)
+								// Read sequence for the genome.
+								fnaFileName := meta.FindRefAcc(genome.Accession) + ".fna"
+								fnaFilePath := filepath.Join(cmd.refBase, s.Path, fnaFileName)
+								genome.Seq = meta.ReadFasta(fnaFilePath).Seq
 
-	// For each strain.
-	for _, s := range strains {
-		for _, genome := range s.Genomes {
-			// We only work on chromosome genomes.
-			if isChromosome(genome.Replicon) {
-				// Read records of reads from a "sam" file.
-				samFileName := s.Path + ".sam"
-				samFilePath := filepath.Join(*cmd.workspace, cmd.samOutBase, samFileName)
-				// Check if the "sam" file exists.
-				if isSamFileExist(samFilePath) {
-					_, records := meta.ReadSamFile(samFilePath)
-					if len(records) == 0 {
-						WARN.Printf("%s,%s has zero records\n", s.Path, genome.Accession)
-					} else {
-						// Read position profile for the genome.
-						posFileName := meta.FindRefAcc(genome.Accession) + ".pos"
-						posFilePath := filepath.Join(cmd.refBase, s.Path, posFileName)
-						genome.PosProfile = meta.ReadPosProfile(posFilePath)
-						// Read sequence for the genome.
-						fnaFileName := meta.FindRefAcc(genome.Accession) + ".fna"
-						fnaFilePath := filepath.Join(cmd.refBase, s.Path, fnaFileName)
-						genome.Seq = meta.ReadFasta(fnaFilePath).Seq
+								// Calculate correlations at each position.
+								for _, pos := range cmd.positions {
+									res := cmd.Cov(records, genome, pos)
+									// Write result to files.
+									filePrefix := fmt.Sprintf("%s_%s_pos%d", s.Path,
+										funcName, pos)
+									filePath := filepath.Join(*cmd.workspace, cmd.covOutBase,
+										filePrefix+".json")
+									save2Json(res, filePath)
 
-						// Calculate correlations at each position.
-						for _, pos := range cmd.positions {
-							res := cmd.Cov(records, genome, pos)
-							// Write result to files.
-							filePrefix := fmt.Sprintf("%s_%s_pos%d", s.Path,
-								cmd.covReadsFuncName, pos)
-							filePath := filepath.Join(*cmd.workspace, cmd.covOutBase,
-								filePrefix+".json")
-							save2Json(res, filePath)
-
+								}
+							}
 						}
 					}
 				}
 			}
 		}
 	}
+
 }
 
 // Calculate covariance for records.

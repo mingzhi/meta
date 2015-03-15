@@ -9,8 +9,7 @@ genome:
 #  name: species prefix.
 #  file: strain file.
 species:
- name: "Streptococcus_pneumoniae"
- file: "Streptococcus_pneumoniae_strains.json"
+ file: "species.yaml"
 
 # Reads Data Info.
 #  paired1: paired end reads file 1.
@@ -34,7 +33,9 @@ out:
 #  positions: positions to be calculated.
 cov:
  maxl: 600
- func: "Cov_Reads_vs_Genome"
+ functions: 
+  - "Cov_Reads_vs_Genome"
+  - "Cov_Reads_vs_Reads"
  positions:
   - 4
 
@@ -42,3 +43,4 @@ cov:
 #  threads: number of threads to be used in bowtie2.
 bowtie2:
  threads: 1
+ Maximum_Mismatch_Count: 3

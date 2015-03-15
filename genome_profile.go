@@ -48,64 +48,66 @@ func GenomePosProfiling(strains []Strain, dir string) {
 					}
 					// Read genome sequence from fna file.
 					acc := FindRefAcc(g.Accession)
-					fnaFileName := acc + ".fna"
-					fnaFilePath := filepath.Join(sDir, fnaFileName)
-					genomeSeq := readFasta(fnaFilePath)[0].Seq
+					if !isPosProfileExists(acc, sDir) {
+						fnaFileName := acc + ".fna"
+						fnaFilePath := filepath.Join(sDir, fnaFileName)
+						genomeSeq := readFasta(fnaFilePath)[0].Seq
 
-					// Initalize position profile.
-					profile := make([]byte, len(genomeSeq))
+						// Initalize position profile.
+						profile := make([]byte, len(genomeSeq))
 
-					// Read protein features from ptt file.
-					pttFileName := acc + ".ptt"
-					pttFilePath := filepath.Join(sDir, pttFileName)
-					pttFile := ncbiutils.NewPttFile(pttFilePath)
-					ptts := pttFile.ReadAll()
+						// Read protein features from ptt file.
+						pttFileName := acc + ".ptt"
+						pttFilePath := filepath.Join(sDir, pttFileName)
+						pttFile := ncbiutils.NewPttFile(pttFilePath)
+						ptts := pttFile.ReadAll()
 
-					// For each gene (a ptt), record codon positions.
-					for _, ptt := range ptts {
-						// Prepare nucleotide sequence,
-						// we need it for determine 4-fold codons.
-						var nucl []byte
-						if ptt.Loc.To >= ptt.Loc.From {
-							nucl = genomeSeq[ptt.Loc.From-1 : ptt.Loc.To]
-						} else {
-							// skip genes across boundary.
-							continue
-						}
+						// For each gene (a ptt), record codon positions.
+						for _, ptt := range ptts {
+							// Prepare nucleotide sequence,
+							// we need it for determine 4-fold codons.
+							var nucl []byte
+							if ptt.Loc.To >= ptt.Loc.From {
+								nucl = genomeSeq[ptt.Loc.From-1 : ptt.Loc.To]
+							} else {
+								// skip genes across boundary.
+								continue
+							}
 
-						if ptt.Loc.Strand == "-" {
-							nucl = seq.Complement(seq.Reverse(nucl))
-						}
+							if ptt.Loc.Strand == "-" {
+								nucl = seq.Complement(seq.Reverse(nucl))
+							}
 
-						prof := make([]byte, len(nucl))
-						for j, _ := range nucl {
-							switch (j + 1) % 3 {
-							case 1:
-								prof[j] = FirstPos
-							case 2:
-								prof[j] = SecondPos
-							case 0:
-								codon := nucl[j-2 : j+1]
-								if gc.FFCodons[string(codon)] {
-									prof[j] = FourFold
-								} else {
-									prof[j] = ThirdPos
+							prof := make([]byte, len(nucl))
+							for j, _ := range nucl {
+								switch (j + 1) % 3 {
+								case 1:
+									prof[j] = FirstPos
+								case 2:
+									prof[j] = SecondPos
+								case 0:
+									codon := nucl[j-2 : j+1]
+									if gc.FFCodons[string(codon)] {
+										prof[j] = FourFold
+									} else {
+										prof[j] = ThirdPos
+									}
 								}
+							}
+
+							if ptt.Loc.Strand == "-" {
+								prof = seq.Reverse(prof)
+							}
+
+							for j, p := range prof {
+								profile[ptt.Loc.From-1+j] = p
 							}
 						}
 
-						if ptt.Loc.Strand == "-" {
-							prof = seq.Reverse(prof)
-						}
-
-						for j, p := range prof {
-							profile[ptt.Loc.From-1+j] = p
-						}
+						// Save genome profile to file.
+						fileName := strings.Replace(fnaFilePath, "fna", "pos", -1)
+						writePosProfile(fileName, profile)
 					}
-
-					// Save genome profile to file.
-					fileName := strings.Replace(fnaFilePath, "fna", "pos", -1)
-					writePosProfile(fileName, profile)
 				}
 			}
 			done <- true
@@ -141,4 +143,33 @@ func writePosProfile(fileName string, profile []byte) {
 	defer w.Close()
 
 	w.Write(profile)
+}
+
+// Check if position profile exists.
+func isPosProfileExists(acc, dir string) (isExist bool) {
+	posProfileName := acc + ".pos"
+	posProfilePath := filepath.Join(dir, posProfileName)
+	if fileinfo, err := os.Stat(posProfilePath); err != nil {
+		if os.IsNotExist(err) {
+			isExist = false
+		} else {
+			log.Fatalln(err)
+		}
+	} else {
+		t1 := fileinfo.ModTime()
+		fnaFileName := acc + ".fna"
+		fnaFilePath := filepath.Join(dir, fnaFileName)
+		fileinfo2, err := os.Stat(fnaFilePath)
+		if err != nil {
+			log.Fatalln(err)
+		} else {
+			if t1.After(fileinfo2.ModTime()) {
+				isExist = true
+			} else {
+				isExist = false
+			}
+		}
+	}
+
+	return
 }

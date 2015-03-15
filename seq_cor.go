@@ -229,9 +229,29 @@ func CovGenomes(alignments []ncbiutils.SeqRecords, genome Genome, maxl, pos int)
 							nucl = append(nucl, b)
 						}
 					}
+
 					start := ref.Loc.From - 1
 					end := ref.Loc.To - 3 // stop codon!
-					prof := genome.PosProfile[start:end]
+					var prof []byte
+					if end > start {
+						if end-start != len(nucl) {
+							if end-start < len(nucl) {
+								end = start + len(nucl)
+							} else {
+								Warn.Printf("Protein: %s profile length %d sequence length %d\n", ref.Id, end-start, len(nucl))
+								continue
+							}
+						}
+						prof = genome.PosProfile[start:end]
+					} else {
+						if len(genome.PosProfile)-start+end > len(nucl) {
+							continue
+						} else {
+							end = len(nucl) + start - len(genome.PosProfile)
+						}
+						prof = genome.PosProfile[start:]
+						prof = append(prof, genome.PosProfile[:end]...)
+					}
 
 					for _, r := range records {
 						if ref.Genome != r.Genome {
@@ -242,12 +262,8 @@ func CovGenomes(alignments []ncbiutils.SeqRecords, genome Genome, maxl, pos int)
 								}
 							}
 
-							if len(prof) != len(nucl) || len(nucl) != len(read) {
-								Warn.Printf("%d\t%d\t%d\n", len(prof), len(nucl), len(read))
-							} else {
-								subs := SubProfile(read, nucl, prof, pos)
-								SubCorr(subs, cc, kc, maxl)
-							}
+							subs := SubProfile(read, nucl, prof, pos)
+							SubCorr(subs, cc, kc, maxl)
 						}
 					}
 				}

@@ -19,21 +19,22 @@ type cmdIndex struct {
 func (cmd *cmdIndex) Run(args []string) {
 	// Parse configure and settings.
 	cmd.ParseConfig()
-	// Read strain information.
-	strainFilePath := filepath.Join(*cmd.workspace, cmd.strainFileName)
-	strains := meta.ReadStrains(strainFilePath)
+
 	// For each strain,
 	// 1. check if genome fasta are already index by bowtie-build,
 	// 2. if not, send to job chan for building index.
 	jobs := make(chan meta.Strain)
 	go func() {
-		for _, strain := range strains {
-			if isBowtieIndexExist(strain, cmd.refBase) {
-				INFO.Printf("%s has already been indexed!\n", strain.Path)
-			} else {
-				jobs <- strain
+		for _, strains := range cmd.speciesMap {
+			for _, strain := range strains {
+				if isBowtieIndexExist(strain, cmd.refBase) {
+					INFO.Printf("%s has already been indexed!\n", strain.Path)
+				} else {
+					jobs <- strain
+				}
 			}
 		}
+
 		close(jobs)
 	}()
 

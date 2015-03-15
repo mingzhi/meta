@@ -22,47 +22,74 @@ func (cmd *cmdCovGenomes) Run(args []string) {
 	cmd.ParseConfig()
 	MakeDir(filepath.Join(*cmd.workspace, cmd.covOutBase))
 
-	// Read strain information.
-	strainFilePath := filepath.Join(*cmd.workspace, cmd.strainFileName)
-	strains := meta.ReadStrains(strainFilePath)
+	for prefix, strains := range cmd.speciesMap {
+		// Make position profiles.
+		meta.GenomePosProfiling(strains, cmd.refBase)
 
-	// Make position profiles.
-	meta.GenomePosProfiling(strains, cmd.refBase)
+		// Read alignments.
+		alignments := cmd.ReadAlignments(prefix)
 
-	// Read alignments.
-	alignments := cmd.ReadAlignments()
+		for _, pos := range cmd.positions {
+			cmd.RunOne(strains, alignments, pos)
+		}
+	}
 
-	// For each strain.
-	for _, s := range strains {
-		for _, genome := range s.Genomes {
-			if isChromosome(genome.Replicon) {
-				// Read position profile for the genome.
-				posFileName := meta.FindRefAcc(genome.Accession) + ".pos"
-				posFilePath := filepath.Join(cmd.refBase, s.Path, posFileName)
-				genome.PosProfile = meta.ReadPosProfile(posFilePath)
-				// Read sequence for the genome.
-				fnaFileName := meta.FindRefAcc(genome.Accession) + ".fna"
-				fnaFilePath := filepath.Join(cmd.refBase, s.Path, fnaFileName)
-				genome.Seq = meta.ReadFasta(fnaFilePath).Seq
+}
 
-				// Calculate correlations at each position.
-				for _, pos := range cmd.positions {
-					res := cmd.Cov(alignments, genome, pos)
-					// Write result to files.
-					filePrefix := fmt.Sprintf("%s_%s_pos%d", s.Path,
-						"Cov_Genomes_vs_Genomes", pos)
-					filePath := filepath.Join(*cmd.workspace, cmd.covOutBase,
-						filePrefix+".json")
-					save2Json(res, filePath)
+func (cmd *cmdCovGenomes) RunOne(strains []meta.Strain, alignments []ncbiutils.SeqRecords, pos int) {
+	// For each strain (genome), create a job.
+	type job struct {
+		strain meta.Strain
+		genome meta.Genome
+	}
+	jobs := make(chan job)
+	go func() {
+		defer close(jobs)
+		for _, strain := range strains {
+			for _, genome := range strain.Genomes {
+				if isChromosome(genome.Replicon) {
+					jobs <- job{strain, genome}
 				}
 			}
 		}
+	}()
+
+	done := make(chan bool)
+	for i := 0; i < *cmd.ncpu; i++ {
+		go func() {
+			for job := range jobs {
+				strain := job.strain
+				genome := job.genome
+				// Read position profile for the genome.
+				posFileName := meta.FindRefAcc(genome.Accession) + ".pos"
+				posFilePath := filepath.Join(cmd.refBase, strain.Path, posFileName)
+				genome.PosProfile = meta.ReadPosProfile(posFilePath)
+				// Read sequence for the genome.
+				fnaFileName := meta.FindRefAcc(genome.Accession) + ".fna"
+				fnaFilePath := filepath.Join(cmd.refBase, strain.Path, fnaFileName)
+				genome.Seq = meta.ReadFasta(fnaFilePath).Seq
+
+				res := cmd.Cov(alignments, genome, pos)
+				// Write result to files.
+				filePrefix := fmt.Sprintf("%s_%s_pos%d", strain.Path,
+					"Cov_Genomes_vs_Genomes", pos)
+				filePath := filepath.Join(*cmd.workspace, cmd.covOutBase,
+					filePrefix+".json")
+				save2Json(res, filePath)
+			}
+			done <- true
+		}()
+	}
+
+	// Waiting for the job done.
+	for i := 0; i < *cmd.ncpu; i++ {
+		<-done
 	}
 }
 
 // Load alignments.
-func (cmd *cmdCovGenomes) ReadAlignments() (alns []ncbiutils.SeqRecords) {
-	fileName := cmd.prefix + "_orthologs_aligned.json"
+func (cmd *cmdCovGenomes) ReadAlignments(prefix string) (alns []ncbiutils.SeqRecords) {
+	fileName := prefix + "_orthologs_aligned.json"
 	filePath := filepath.Join(*cmd.workspace, cmd.orthoOutBase,
 		fileName)
 	r, err := os.Open(filePath)
