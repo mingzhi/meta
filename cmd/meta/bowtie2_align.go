@@ -11,6 +11,11 @@ import (
 	"strings"
 )
 
+var (
+	bowtiedSamAppendix string = ".bowtie2_aligned.sam"
+	bowtiedLogAppendix string = ".bowtie2_aligned.log"
+)
+
 // Command for mapping reads to reference genomes.
 type cmdAlignReads struct {
 	cmdConfig // embedded cmdConfig.
@@ -24,11 +29,11 @@ func (cmd *cmdAlignReads) Run(args []string) {
 	// Map reads to each strain.
 	jobs := make(chan meta.Strain)
 	go func() {
+		defer close(jobs)
 		for _, strains := range cmd.speciesMap {
 			for _, s := range strains {
 				jobs <- s
 			}
-			close(jobs)
 		}
 	}()
 
@@ -95,7 +100,7 @@ func (cmd *cmdAlignReads) align(strain meta.Strain) {
 
 	genomeIndexBase := filepath.Join(cmd.refBase, strain.Path, strain.Path)
 	outFilePrefix := filepath.Join(*cmd.workspace, cmd.samOutBase, strain.Path)
-	samOutFilePath := outFilePrefix + ".bowtie2_aligned.sam"
+	samOutFilePath := outFilePrefix + bowtiedSamAppendix
 	options = append(options, []string{"-x", genomeIndexBase}...)
 	options = append(options, []string{"-1", cmd.pairedEndReadFile1}...)
 	options = append(options, []string{"-2", cmd.pairedEndReadFile2}...)
@@ -113,7 +118,7 @@ func (cmd *cmdAlignReads) align(strain meta.Strain) {
 	command := exec.Command("bowtie2", options...)
 	stderr := new(bytes.Buffer)
 	command.Stderr = stderr
-	logFilePath := outFilePrefix + ".bowtie2_aligned.log"
+	logFilePath := outFilePrefix + bowtiedLogAppendix
 	logFile, err := os.Create(logFilePath)
 	if err != nil {
 		ERROR.Printf("Cannot create %s: %v\n", logFilePath, err)
