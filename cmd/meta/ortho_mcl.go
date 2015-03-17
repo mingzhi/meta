@@ -18,6 +18,7 @@ type cmdOrthoMCL struct {
 func (cmd *cmdOrthoMCL) Run(args []string) {
 	// Parse config and settings.
 	cmd.ParseConfig()
+	cmd.LoadSpeciesMap()
 	MakeDir(filepath.Join(*cmd.workspace, cmd.orthoOutBase))
 
 	for prefix, strains := range cmd.speciesMap {

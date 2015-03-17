@@ -30,6 +30,7 @@ type cmdEstimate struct {
 // Run command.
 func (cmd *cmdEstimate) Run(args []string) {
 	cmd.ParseConfig()
+	cmd.LoadSpeciesMap()
 	MakeDir(filepath.Join(*cmd.workspace, cmd.plotBase))
 
 	INFO.Printf("Fitting Range: %d - %d\n", cmd.fitStart, cmd.fitEnd)

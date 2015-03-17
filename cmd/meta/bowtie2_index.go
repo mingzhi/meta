@@ -19,6 +19,7 @@ type cmdIndex struct {
 func (cmd *cmdIndex) Run(args []string) {
 	// Parse configure and settings.
 	cmd.ParseConfig()
+	cmd.LoadSpeciesMap()
 
 	// For each strain,
 	// 1. check if genome fasta are already index by bowtie-build,

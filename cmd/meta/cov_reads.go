@@ -23,6 +23,7 @@ type cmdCovReads struct {
 func (cmd *cmdCovReads) Run(args []string) {
 	// Parse config and settings.
 	cmd.ParseConfig()
+	cmd.LoadSpeciesMap()
 	MakeDir(filepath.Join(*cmd.workspace, cmd.covOutBase))
 
 	for _, funcName := range cmd.covReadsFunctions {

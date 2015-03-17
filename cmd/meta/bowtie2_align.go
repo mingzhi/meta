@@ -2,12 +2,10 @@ package main
 
 import (
 	"bytes"
-	"fmt"
 	"github.com/mingzhi/meta"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strconv"
 	"strings"
 )
 
@@ -24,6 +22,7 @@ type cmdAlignReads struct {
 func (cmd *cmdAlignReads) Run(args []string) {
 	// Parse configure and settings.
 	cmd.ParseConfig()
+	cmd.LoadSpeciesMap()
 	MakeDir(filepath.Join(*cmd.workspace, cmd.samOutBase))
 
 	// Map reads to each strain.
@@ -88,16 +87,13 @@ func (cmd *cmdAlignReads) align(strain meta.Strain) {
 		"--no-unal",
 		"--no-discordant",
 		"--no-mixed",
-		"--ignore-quals",
 	}
 
 	// for fasta or fastq
 	// here default to be fastq.
 	options = append(options, "-q")
-	// bowtie threads number.
-	threadsNum := strconv.Itoa(cmd.bowtieThreadsNum)
-	options = append(options, []string{"-p", threadsNum}...)
 
+	// reference genome and reads setting.
 	genomeIndexBase := filepath.Join(cmd.refBase, strain.Path, strain.Path)
 	outFilePrefix := filepath.Join(*cmd.workspace, cmd.samOutBase, strain.Path)
 	samOutFilePath := outFilePrefix + bowtiedSamAppendix
@@ -106,15 +102,14 @@ func (cmd *cmdAlignReads) align(strain meta.Strain) {
 	options = append(options, []string{"-2", cmd.pairedEndReadFile2}...)
 	options = append(options, []string{"-S", samOutFilePath}...)
 
-	// calculate min_score based on number of mismatches.
-	if cmd.maximumMismatchCount > 0 {
-		min_score := cmd.maximumMismatchCount * (-6)
-		options = append(options, []string{"--mp", "6,6"}...)
-		options = append(options, []string{"--np", "6"}...)
-		options = append(options, []string{"--score-min", fmt.Sprintf("L,%d,0.0", min_score)}...)
-		options = append(options, []string{"--gbar", "1000"}...)
+	// additional options from configure file.
+	if len(cmd.bowtieOptions) > 0 {
+		options = append(options, cmd.bowtieOptions...)
 	}
 
+	INFO.Printf("Bowtie2 options: %v\n", options)
+
+	// execute bowtie2.
 	command := exec.Command("bowtie2", options...)
 	stderr := new(bytes.Buffer)
 	command.Stderr = stderr

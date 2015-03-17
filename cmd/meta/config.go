@@ -27,10 +27,11 @@ type cmdConfig struct {
 	samOutBase string // sam output folder.
 
 	// For align_reads.
-	pairedEndReadFile1   string // paired-end read file 1.
-	pairedEndReadFile2   string // paired-end read file 2.
-	bowtieThreadsNum     int    // bowtie threads number.
-	maximumMismatchCount int    // maximum mismatch count.
+	pairedEndReadFile1 string // paired-end read file 1.
+	pairedEndReadFile2 string // paired-end read file 2.
+
+	// Bowtie2 options.
+	bowtieOptions []string // bowtie2 options.
 
 	// For cov calculations.
 	positions         []int    // positions in genomic profile to be calculated.
@@ -88,11 +89,10 @@ func (cmd *cmdConfig) ParseConfig() {
 	cmd.maxl = config.GetInt("cov.maxl")
 	cmd.covReadsFunctions = config.GetStringSlice("cov.functions")
 	// Bowtie2 settings
-	cmd.bowtieThreadsNum = config.GetInt("bowtie2.threads")
-	cmd.maximumMismatchCount = config.GetInt("bowtie2.maximum_mismatch_count")
+	cmd.bowtieOptions = config.GetStringSlice("bowtie2.options")
 	// Bacterial species informations
 	cmd.speciesFile = config.GetString("species.file")
-	cmd.LoadSpeciesMap()
+	// cmd.LoadSpeciesMap()
 
 	// Fit range.
 	cmd.fitStart = config.GetInt("fit.start")
@@ -113,10 +113,6 @@ func (cmd *cmdConfig) ParseConfig() {
 
 	if len(cmd.positions) == 0 {
 		WARN.Println("Use default position: 4!")
-	}
-
-	if cmd.bowtieThreadsNum <= 0 {
-		cmd.bowtieThreadsNum = 1
 	}
 
 	runtime.GOMAXPROCS(*cmd.ncpu)
