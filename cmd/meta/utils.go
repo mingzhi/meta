@@ -40,3 +40,19 @@ func save2Json(cr CovResult, fileName string) {
 		ERROR.Fatalln(err)
 	}
 }
+
+// Read cov result.
+func readCovResult(fileName string) (cr CovResult) {
+	r, err := os.Open(fileName)
+	if err != nil {
+		ERROR.Fatalln("Cannot open file: %s, %v", fileName, err)
+	}
+	defer r.Close()
+
+	decoder := json.NewDecoder(r)
+	err = decoder.Decode(&cr)
+	if err != nil {
+		ERROR.Fatalln("Cannot decode file: %s, with CovResult: %v", fileName, err)
+	}
+	return
+}

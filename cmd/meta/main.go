@@ -17,7 +17,7 @@ func main() {
 	INFO = log.New(os.Stdout, "INFO: ", log.Ldate|log.Ltime|log.Lshortfile)
 	WARN = log.New(os.Stdout, "WARN: ", log.Ldate|log.Ltime|log.Lshortfile)
 	ERROR = log.New(os.Stderr, "ERROR:", log.Ldate|log.Ltime|log.Lshortfile)
-
+	registerLogger()
 	// Register commands.
 	args := []string{}
 	command.On("init", "generate strain information", &cmdInit{}, args)
@@ -27,6 +27,7 @@ func main() {
 	command.On("cov_genomes", "calculate correlation of subsitutions in genomes", &cmdCovGenomes{}, args)
 	command.On("bowtie2_index", "build bowtie2 index", &cmdIndex{}, []string{})
 	command.On("bowtie2_align", "align reads using bowtie2", &cmdAlignReads{}, args)
+	command.On("estimate", "estimate r/m", &cmdEstimate{}, args)
 
 	// Parse and run commands.
 	command.ParseAndRun()

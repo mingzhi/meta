@@ -45,6 +45,13 @@ type cmdConfig struct {
 	// prefix: []strain.
 	speciesFile string // species YAML file.
 	speciesMap  map[string][]meta.Strain
+
+	// Fit parameters.
+	fitStart, fitEnd int
+	fitRSquare       float64
+
+	// Plot parameters
+	plotBase string
 }
 
 func (cmd *cmdConfig) Flags(fs *flag.FlagSet) *flag.FlagSet {
@@ -87,6 +94,14 @@ func (cmd *cmdConfig) ParseConfig() {
 	cmd.speciesFile = config.GetString("species.file")
 	cmd.LoadSpeciesMap()
 
+	// Fit range.
+	cmd.fitStart = config.GetInt("fit.start")
+	cmd.fitEnd = config.GetInt("fit.end")
+	cmd.fitRSquare = config.GetFloat64("fit.rsquare")
+
+	// Plot parameters.
+	cmd.plotBase = config.GetString("plot.dir")
+
 	positions := config.GetStringSlice("cov.positions")
 	for _, p := range positions {
 		pos, err := strconv.Atoi(p)
@@ -105,7 +120,7 @@ func (cmd *cmdConfig) ParseConfig() {
 	}
 
 	runtime.GOMAXPROCS(*cmd.ncpu)
-	registerLogger()
+
 }
 
 // Check if there exists a file containing strain information.
