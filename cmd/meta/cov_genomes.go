@@ -70,13 +70,27 @@ func (cmd *cmdCovGenomes) RunOne(strains []meta.Strain, alignments []ncbiutils.S
 				fnaFilePath := filepath.Join(cmd.refBase, strain.Path, fnaFileName)
 				genome.Seq = meta.ReadFasta(fnaFilePath).Seq
 
-				res := cmd.Cov(alignments, genome, pos)
-				// Write result to files.
-				filePrefix := fmt.Sprintf("%s_%s_pos%d", strain.Path,
-					"Cov_Genomes_vs_Genomes", pos)
-				filePath := filepath.Join(*cmd.workspace, cmd.covOutBase,
-					filePrefix+".json")
-				save2Json(res, filePath)
+				covGenomesFuncs := []meta.CovGenomesFunc{
+					meta.CovGenomesGenome,
+					meta.CovGenomesGenomes,
+				}
+
+				covGenomesFuncNames := []string{
+					"Cov_Genomes_vs_Genome",
+					"Cov_Genomes_vs_Genomes",
+				}
+
+				for j, covGenomesFunc := range covGenomesFuncs {
+					funcType := covGenomesFuncNames[j]
+					res := cmd.Cov(alignments, genome, pos, covGenomesFunc)
+					// Write result to files.
+					filePrefix := fmt.Sprintf("%s_%s_pos%d", strain.Path,
+						funcType, pos)
+					filePath := filepath.Join(*cmd.workspace, cmd.covOutBase,
+						filePrefix+".json")
+					save2Json(res, filePath)
+				}
+
 			}
 			done <- true
 		}()
@@ -110,8 +124,8 @@ func (cmd *cmdCovGenomes) ReadAlignments(prefix string) (alns []ncbiutils.SeqRec
 
 // Calculate covariances for records.
 func (cmd *cmdCovGenomes) Cov(records []ncbiutils.SeqRecords,
-	genome meta.Genome, pos int) (res CovResult) {
-	kc, cc := meta.CovGenomes(records, genome, cmd.maxl, pos)
+	genome meta.Genome, pos int, covGenomesFunc meta.CovGenomesFunc) (res CovResult) {
+	kc, cc := covGenomesFunc(records, genome, cmd.maxl, pos)
 
 	// Process and return a cov result.
 	res.Ks = kc.Mean.GetResult()
