@@ -31,8 +31,10 @@ func (cmd *cmdCovReads) Run(args []string) {
 		switch funcName {
 		case "Cov_Reads_vs_Reads":
 			cmd.covFunc = meta.CovReadsReads
-		default:
+		case "Cov_Reads_vs_Genome":
 			cmd.covFunc = meta.CovReadsGenome
+		default:
+			continue
 		}
 
 		for _, strains := range cmd.speciesMap {
