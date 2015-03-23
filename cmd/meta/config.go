@@ -22,8 +22,10 @@ type cmdConfig struct {
 	ncpu      *int    // number of CPUs for using.
 
 	// Data diretory and path.
-	refBase    string // reference genome folder.
-	taxBase    string // taxonomy database folder.
+	refBase string // reference genome folder.
+	taxBase string // taxonomy database folder.
+	repBase string // genome report database.
+
 	samOutBase string // sam output folder.
 
 	// For align_reads.
@@ -78,6 +80,7 @@ func (cmd *cmdConfig) ParseConfig() {
 	// Data
 	cmd.refBase = config.GetString("genome.reference")
 	cmd.taxBase = config.GetString("genome.taxonomy")
+	cmd.repBase = config.GetString("genome.reports")
 	// Reads
 	cmd.pairedEndReadFile1 = config.GetString("reads.paired1")
 	cmd.pairedEndReadFile2 = config.GetString("reads.paired2")
@@ -117,38 +120,6 @@ func (cmd *cmdConfig) ParseConfig() {
 
 	runtime.GOMAXPROCS(*cmd.ncpu)
 
-}
-
-// Check if there exists a file containing strain information.
-// If exists, also check the modified time, which should be
-// after that of summary.txt.
-func (cmd *cmdConfig) IsReferenceStrainsExist() (isExist bool) {
-	filePath := filepath.Join(*cmd.workspace, "reference_strains.json")
-	if fi1, err := os.Stat(filePath); err != nil {
-		if os.IsNotExist(err) {
-			isExist = false
-		} else {
-			ERROR.Fatalln(err)
-		}
-	} else {
-		summaryFile := filepath.Join(cmd.refBase, "summary.txt")
-		fi2, err := os.Stat(summaryFile)
-		if err != nil {
-			if os.IsNotExist(err) {
-				ERROR.Fatalln("Cannot find summary.txt in reference genome directory!")
-			} else {
-				ERROR.Fatalln(err)
-			}
-		} else {
-			if fi1.ModTime().After(fi2.ModTime()) {
-				isExist = true
-			} else {
-				isExist = false
-			}
-		}
-	}
-
-	return
 }
 
 // Read reference_strains.json.
@@ -212,10 +183,10 @@ func (cmd *cmdConfig) LoadSpeciesMap() {
 	// If reference_strains exists, read it,
 	// else generate it.
 	var strains []meta.Strain
-	if cmd.IsReferenceStrainsExist() {
+	if isReferenceStrainsExists(*cmd.workspace, cmd.repBase) {
 		strains = cmd.ReadReferenceStrains()
 	} else {
-		strains = cmd.CreateReferenceStrains()
+		ERROR.Fatalln("Can not find reference_strains.json, please run meta init first!")
 	}
 
 	// Make a strain map,
@@ -232,9 +203,12 @@ func (cmd *cmdConfig) LoadSpeciesMap() {
 	cmd.speciesMap = make(map[string][]meta.Strain)
 	for prefix, strainPaths := range inputMap {
 		for _, strainPath := range strainPaths {
+			INFO.Println(strainPath)
 			strain, found := strainMap[strainPath]
 			if found {
 				cmd.speciesMap[prefix] = append(cmd.speciesMap[prefix], strain)
+			} else {
+				INFO.Printf("Cannot find %s\n", strainPath)
 			}
 		}
 	}

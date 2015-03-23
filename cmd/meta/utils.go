@@ -37,6 +37,7 @@ func save2Json(cr CovResult, fileName string) {
 
 	ec := json.NewEncoder(f)
 	if err := ec.Encode(cr); err != nil {
+		ERROR.Println(cr)
 		ERROR.Fatalln(err)
 	}
 }
