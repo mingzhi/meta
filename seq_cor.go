@@ -4,7 +4,6 @@ import (
 	"github.com/mingzhi/ncbiutils"
 	"math"
 	"runtime"
-	"sort"
 )
 
 type CovGenomesFunc func(alignments []ncbiutils.SeqRecords, genome Genome, maxl, pos int) (kc *KsCalculator, cc *CovCalculator)
@@ -15,11 +14,7 @@ type CovGenomesFunc func(alignments []ncbiutils.SeqRecords, genome Genome, maxl,
 // genome: Genome;
 // maxl: max length of correlations;
 // pos: positions to be calculated.
-func CovReadsGenome(records SamRecords, genome Genome, maxl, pos int) (kc *KsCalculator, cc *CovCalculator) {
-	// Obtain paired-end reads.
-	matedReads := GetPairedEndReads(records)
-	// Info.Printf("%s, paired end reads: %d\n", genome.Accession, len(matedReads))
-	sort.Sort(ByLeftCoordinatePairedEndReads{matedReads})
+func CovReadsGenome(matedReads PairedEndReads, genome Genome, maxl, pos int) (kc *KsCalculator, cc *CovCalculator) {
 	// Prepare jobs.
 	type job struct {
 		r PairedEndRead
@@ -87,33 +82,25 @@ func CovReadsGenome(records SamRecords, genome Genome, maxl, pos int) (kc *KsCal
 // genome: Genome;
 // maxl: max length of correlations;
 // pos: postions to be calculated.
-func CovReadsReads(records SamRecords, genome Genome, maxl, pos int) (kc *KsCalculator, cc *CovCalculator) {
-	// Obtain paired-end reads.
-	matedReads := GetPairedEndReads(records)
-	founds := PairedEndReads{}
-	maxReadLength := 0
-	for _, r := range matedReads {
-		if FindRefAcc(r.ReadLeft.Ref.Name()) == FindRefAcc(genome.Accession) {
-			founds = append(founds, r)
-			readLen := r.ReadRight.Pos + r.ReadRight.Len() - r.ReadLeft.Pos
-			if maxReadLength < readLen {
-				maxReadLength = readLen
-			}
-		}
-	}
-	// Info.Printf("%s, paired end reads: %d\n", genome.Accession, len(matedReads))
-	sort.Sort(ByLeftCoordinatePairedEndReads{founds})
-
+func CovReadsReads(matedReads PairedEndReads, genome Genome, maxl, pos int) (kc *KsCalculator, cc *CovCalculator) {
 	ncpu := runtime.GOMAXPROCS(0)
 	// Create job channel.
 	type job struct {
-		i int
-		r PairedEndRead
+		r1, r2 PairedEndRead
 	}
 	jobs := make(chan job)
 	go func() {
-		for i, r := range founds {
-			jobs <- job{i, r}
+
+		for i := 0; i < len(matedReads); i++ {
+			r1 := matedReads[i]
+			for j := i - 1; j >= 0; j-- {
+				r2 := matedReads[j]
+				if r2.ReadRight.Pos+r2.ReadRight.Len() < r1.ReadLeft.Pos {
+					break
+				} else {
+					jobs <- job{r1, r2}
+				}
+			}
 		}
 		close(jobs)
 	}()
@@ -123,56 +110,38 @@ func CovReadsReads(records SamRecords, genome Genome, maxl, pos int) (kc *KsCalc
 		kc *KsCalculator
 	}
 	results := make(chan result)
+
 	for i := 0; i < ncpu; i++ {
 		go func() {
-			// Prepare calculators.
-			bias := true
-			cc := NewCovCalculator(maxl, bias)
+			// prepare calculators.
+			biasCorrection := true
+			cc := NewCovCalculator(maxl, biasCorrection)
 			kc := NewKsCalculator()
-			for i, r1 := range founds {
+
+			// do calculation for each job.
+			for job := range jobs {
+				r1, r2 := job.r1, job.r2
 				read1 := mated2Ref(r1)
-				for j := i - 1; j >= 0; j-- {
-					r2 := founds[j]
-					if r2.ReadLeft.Pos+maxReadLength < r1.ReadLeft.Pos {
-						break
-					}
-					read2 := mated2Ref(r2)
-					// Check if overlap.
-					if r2.ReadLeft.Pos+len(read2) > r1.ReadLeft.Pos {
-						// Determine overlap regions (in genome coordinate).
-						start := maxInt(r1.ReadLeft.Pos, r2.ReadLeft.Pos)
-						end := minInt(r1.ReadLeft.Pos+len(read1), r2.ReadLeft.Pos+len(read2))
-						// Prepare profile and read sequences.
-						profile := genome.PosProfile[start:end]
-						nucl1 := read1[start-r1.ReadLeft.Pos : end-r1.ReadLeft.Pos]
-						nucl2 := read2[start-r2.ReadLeft.Pos : end-r2.ReadLeft.Pos]
+				read2 := mated2Ref(r2)
 
-						// nucl := genome.Seq[start:end]
-						// Info.Printf("%d\t%d\t%d\n", len(nucl1), len(nucl2), len(profile))
-						// Info.Printf("\n%s\n%s\n%s\n\n", string(nucl1), string(nucl2), string(nucl))
+				// double check if overlap.
+				if r2.ReadLeft.Pos+len(read2) > r1.ReadLeft.Pos {
+					// Determine overlap regions (in genome coordinate).
+					start := maxInt(r1.ReadLeft.Pos, r2.ReadLeft.Pos)
+					end := minInt(r1.ReadLeft.Pos+len(read1), r2.ReadLeft.Pos+len(read2))
 
-						// Subsitution profiling.
-						subs := SubProfile(nucl1, nucl2, profile, pos)
+					// Prepare profile and read sequences.
+					profile := genome.PosProfile[start:end]
+					nucl1 := read1[start-r1.ReadLeft.Pos : end-r1.ReadLeft.Pos]
+					nucl2 := read2[start-r2.ReadLeft.Pos : end-r2.ReadLeft.Pos]
 
-						// Update cc and kc.
-						for l := 0; l < maxl; l++ {
-							for i := 0; i < len(subs)-l; i++ {
-								x, y := subs[i], subs[i+l]
-								if !math.IsNaN(x) && !math.IsNaN(y) {
-									cc.Increment(l, x, y)
-								}
+					// Subsitution profiling.
+					subs := SubProfile(nucl1, nucl2, profile, pos)
 
-								if l == 0 {
-									if !math.IsNaN(x) {
-										kc.Increment(x)
-									}
-								}
-							}
-						}
-					}
-
+					SubCorr(subs, cc, kc, maxl)
 				}
 			}
+
 			results <- result{cc, kc}
 		}()
 	}
@@ -434,17 +403,24 @@ func SubProfile(read, nucl, profile []byte, pos int) []float64 {
 
 // Calculate correlations of subsitutions.
 func SubCorr(subs []float64, cc *CovCalculator, kc *KsCalculator, maxl int) {
-	for l := 0; l < maxl; l++ {
-		for i := 0; i < len(subs)-l; i++ {
-			x, y := subs[i], subs[i+l]
-			if !math.IsNaN(x) && !math.IsNaN(y) {
+	// Calculate kc and obtain position indices.
+	posIndices := []int{}
+	for k := 0; k < len(subs); k++ {
+		if !math.IsNaN(subs[k]) {
+			kc.Increment(subs[k])
+			posIndices = append(posIndices, k)
+			cc.Increment(0, subs[k], subs[k])
+		}
+	}
+	// Calculate cc.
+	for j := 0; j < len(posIndices); j++ {
+		for k := j + 1; k < len(posIndices); k++ {
+			l := posIndices[k] - posIndices[j]
+			if l >= maxl {
+				break
+			} else {
+				x, y := subs[posIndices[j]], subs[posIndices[k]]
 				cc.Increment(l, x, y)
-			}
-
-			if l == 0 {
-				if !math.IsNaN(x) {
-					kc.Increment(x)
-				}
 			}
 		}
 	}

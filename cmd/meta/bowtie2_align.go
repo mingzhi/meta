@@ -11,6 +11,7 @@ import (
 
 var (
 	bowtiedSamAppendix string = ".bowtie2_aligned.sam"
+	bowtiedBamAppendix string = ".bowtie2_aligned.bam"
 	bowtiedLogAppendix string = ".bowtie2_aligned.log"
 )
 

@@ -156,6 +156,14 @@ func (p ByLeftCoordinatePairedEndReads) Less(i, j int) bool {
 	return p.PairedEndReads[i].ReadLeft.Pos < p.PairedEndReads[j].ReadLeft.Pos
 }
 
+type ByRightCoordinatePairedEndReads struct{ PairedEndReads }
+
+func (p ByRightCoordinatePairedEndReads) Less(i, j int) bool {
+	r1 := p.PairedEndReads[i]
+	r2 := p.PairedEndReads[j]
+	return r1.ReadRight.Pos+r1.ReadRight.Len() < r2.ReadRight.Pos+r2.ReadRight.Len()
+}
+
 func GetPairedEndReads(records SamRecords) PairedEndReads {
 	// Sort records by name.
 	sort.Sort(ByReadName{records})
