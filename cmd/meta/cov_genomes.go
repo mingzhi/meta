@@ -47,6 +47,7 @@ func (cmd *cmdCovGenomes) RunOne(strains []meta.Strain, alignments []ncbiutils.S
 	go func() {
 		defer close(jobs)
 		for _, strain := range strains {
+			MakeDir(filepath.Join(*cmd.workspace, cmd.covOutBase, strain.Path))
 			for _, genome := range strain.Genomes {
 				if isChromosome(genome.Replicon) {
 					jobs <- job{strain, genome}
@@ -80,13 +81,15 @@ func (cmd *cmdCovGenomes) RunOne(strains []meta.Strain, alignments []ncbiutils.S
 					"Cov_Genomes_vs_Genomes",
 				}
 
+				acc := meta.FindRefAcc(genome.Accession)
+
 				for j, covGenomesFunc := range covGenomesFuncs {
 					funcType := covGenomesFuncNames[j]
 					res := cmd.Cov(alignments, genome, pos, covGenomesFunc)
 					// Write result to files.
-					filePrefix := fmt.Sprintf("%s_%s_pos%d", strain.Path,
+					filePrefix := fmt.Sprintf("%s_%s_pos%d", acc,
 						funcType, pos)
-					filePath := filepath.Join(*cmd.workspace, cmd.covOutBase,
+					filePath := filepath.Join(*cmd.workspace, cmd.covOutBase, strain.Path,
 						filePrefix+".json")
 					save2Json(res, filePath)
 				}

@@ -33,12 +33,14 @@ func (cmd *cmdCovReads) Run(args []string) {
 
 		// For each strain.
 		for _, s := range strains {
+			MakeDir(filepath.Join(*cmd.workspace, cmd.covOutBase, s.Path))
 			for _, genome := range s.Genomes {
 				// We only work on chromosome genomes.
 				if isChromosome(genome.Replicon) {
+					acc := meta.FindRefAcc(genome.Accession)
 					// Read records of reads from a "sam" file.
-					samFileName := s.Path + bowtiedSamAppendix
-					samFilePath := filepath.Join(*cmd.workspace, cmd.samOutBase, samFileName)
+					samFileName := acc + bowtiedSamAppendix
+					samFilePath := filepath.Join(*cmd.workspace, cmd.samOutBase, s.Path, samFileName)
 					// Check if the "sam" file exists.
 					if isSamFileExist(samFilePath) {
 						_, records := meta.ReadSamFile(samFilePath)
@@ -74,15 +76,17 @@ func (cmd *cmdCovReads) Run(args []string) {
 								for _, pos := range cmd.positions {
 									res := cmd.Cov(matedReads, genome, pos)
 									// Write result to files.
-									filePrefix := fmt.Sprintf("%s_%s_pos%d", s.Path,
+									filePrefix := fmt.Sprintf("%s_%s_pos%d", acc,
 										funcName, pos)
-									filePath := filepath.Join(*cmd.workspace, cmd.covOutBase,
+									filePath := filepath.Join(*cmd.workspace, cmd.covOutBase, s.Path,
 										filePrefix+".json")
 									save2Json(res, filePath)
 								}
 							}
 
 						}
+					} else {
+						ERROR.Panicf("Cannot find sam file: %s\n", samFilePath)
 					}
 				}
 			}

@@ -203,7 +203,6 @@ func (cmd *cmdConfig) LoadSpeciesMap() {
 	cmd.speciesMap = make(map[string][]meta.Strain)
 	for prefix, strainPaths := range inputMap {
 		for _, strainPath := range strainPaths {
-			INFO.Println(strainPath)
 			strain, found := strainMap[strainPath]
 			if found {
 				cmd.speciesMap[prefix] = append(cmd.speciesMap[prefix], strain)

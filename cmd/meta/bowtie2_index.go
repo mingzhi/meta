@@ -6,7 +6,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
 	"time"
 )
 
@@ -99,22 +98,16 @@ func isBowtieIndexExist(strain meta.Strain, refDir string) (isExist bool) {
 
 // Build bowtie2 index.
 func bowtieBuildIndex(strain meta.Strain, refDir string) {
-	genomeFastaPaths := []string{}
 	for _, g := range strain.Genomes {
 		acc := meta.FindRefAcc(g.Accession)
-		genomeFastaName := acc + ".fna"
-		genomeFastaPath := filepath.Join(refDir, strain.Path, genomeFastaName)
-		genomeFastaPaths = append(genomeFastaPaths, genomeFastaPath)
-	}
-
-	genomeFastasPath := strings.Join(genomeFastaPaths, ",")
-	genomeIndexBase := filepath.Join(refDir, strain.Path, strain.Path)
-
-	cmd := exec.Command("bowtie2-build", "-f", genomeFastasPath, genomeIndexBase)
-	// capture stderr.
-	stderr := new(bytes.Buffer)
-	cmd.Stderr = stderr
-	if err := cmd.Run(); err != nil {
-		ERROR.Fatalln(string(stderr.Bytes()))
+		genomeFastaPath := filepath.Join(refDir, strain.Path, acc+".fna")
+		genomeIndexBase := filepath.Join(refDir, strain.Path, acc)
+		cmd := exec.Command("bowtie2-build", "-f", genomeFastaPath, genomeIndexBase)
+		// capture stderr.
+		stderr := new(bytes.Buffer)
+		cmd.Stderr = stderr
+		if err := cmd.Run(); err != nil {
+			ERROR.Fatalln(string(stderr.Bytes()))
+		}
 	}
 }

@@ -93,38 +93,45 @@ func (cmd *cmdAlignReads) align(strain meta.Strain) {
 	// here default to be fastq.
 	options = append(options, "-q")
 
-	// reference genome and reads setting.
-	genomeIndexBase := filepath.Join(cmd.refBase, strain.Path, strain.Path)
-	outFilePrefix := filepath.Join(*cmd.workspace, cmd.samOutBase, strain.Path)
-	samOutFilePath := outFilePrefix + bowtiedSamAppendix
-	options = append(options, []string{"-x", genomeIndexBase}...)
-	options = append(options, []string{"-1", cmd.pairedEndReadFile1}...)
-	options = append(options, []string{"-2", cmd.pairedEndReadFile2}...)
-	options = append(options, []string{"-S", samOutFilePath}...)
+	outPath := filepath.Join(*cmd.workspace, cmd.samOutBase, strain.Path)
+	MakeDir(outPath)
 
-	// additional options from configure file.
-	if len(cmd.bowtieOptions) > 0 {
-		options = append(options, cmd.bowtieOptions...)
+	for _, g := range strain.Genomes {
+		acc := meta.FindRefAcc(g.Accession)
+		// reference genome and reads setting.
+		genomeIndexBase := filepath.Join(cmd.refBase, strain.Path, acc)
+		outFilePrefix := filepath.Join(outPath, acc)
+		samOutFilePath := outFilePrefix + bowtiedSamAppendix
+		options = append(options, []string{"-x", genomeIndexBase}...)
+		options = append(options, []string{"-1", cmd.pairedEndReadFile1}...)
+		options = append(options, []string{"-2", cmd.pairedEndReadFile2}...)
+		options = append(options, []string{"-S", samOutFilePath}...)
+
+		// additional options from configure file.
+		if len(cmd.bowtieOptions) > 0 {
+			options = append(options, cmd.bowtieOptions...)
+		}
+
+		INFO.Printf("Bowtie2 options: %v\n", options)
+
+		// execute bowtie2.
+		command := exec.Command("bowtie2", options...)
+
+		// record bowtie alignment summaries,
+		// which are printed into stderr.
+		logFilePath := outFilePrefix + bowtiedLogAppendix
+		logFile, err := os.Create(logFilePath)
+		if err != nil {
+			ERROR.Printf("Cannot create %s: %v\n", logFilePath, err)
+		}
+		defer logFile.Close()
+		command.Stderr = logFile
+
+		err = command.Run()
+		if err != nil {
+			ERROR.Println(strings.Join(options, " "))
+			ERROR.Println(err)
+		}
 	}
 
-	INFO.Printf("Bowtie2 options: %v\n", options)
-
-	// execute bowtie2.
-	command := exec.Command("bowtie2", options...)
-
-	// record bowtie alignment summaries,
-	// which are printed into stderr.
-	logFilePath := outFilePrefix + bowtiedLogAppendix
-	logFile, err := os.Create(logFilePath)
-	if err != nil {
-		ERROR.Printf("Cannot create %s: %v\n", logFilePath, err)
-	}
-	defer logFile.Close()
-	command.Stderr = logFile
-
-	err = command.Run()
-	if err != nil {
-		ERROR.Println(strings.Join(options, " "))
-		ERROR.Println(err)
-	}
 }
