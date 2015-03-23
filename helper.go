@@ -2,7 +2,7 @@ package meta
 
 import (
 	"bytes"
-	"code.google.com/p/biogo.hts/sam"
+	"github.com/biogo/hts/sam"
 	"github.com/mingzhi/biogo/seq"
 
 	"io/ioutil"

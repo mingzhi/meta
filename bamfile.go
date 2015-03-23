@@ -3,8 +3,8 @@ package meta
 // BAM file operations.
 
 import (
-	"code.google.com/p/biogo.hts/bam"
-	"code.google.com/p/biogo.hts/sam"
+	"github.com/biogo/hts/bam"
+	"github.com/biogo/hts/sam"
 	"io"
 	"log"
 	"os"
