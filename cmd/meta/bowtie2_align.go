@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"github.com/mingzhi/meta"
 	"os"
 	"os/exec"
@@ -112,19 +111,20 @@ func (cmd *cmdAlignReads) align(strain meta.Strain) {
 
 	// execute bowtie2.
 	command := exec.Command("bowtie2", options...)
-	stderr := new(bytes.Buffer)
-	command.Stderr = stderr
+
+	// record bowtie alignment summaries,
+	// which are printed into stderr.
 	logFilePath := outFilePrefix + bowtiedLogAppendix
 	logFile, err := os.Create(logFilePath)
 	if err != nil {
 		ERROR.Printf("Cannot create %s: %v\n", logFilePath, err)
 	}
 	defer logFile.Close()
-	command.Stdout = logFile
+	command.Stderr = logFile
+
 	err = command.Run()
 	if err != nil {
 		ERROR.Println(strings.Join(options, " "))
 		ERROR.Println(err)
-		ERROR.Fatalln(string(stderr.Bytes()))
 	}
 }
