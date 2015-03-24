@@ -161,16 +161,20 @@ func getStrainInfors(refBase, repBase, taxBase string) (strains []meta.Strain) {
 			}
 		}
 
-		strains = append(strains, s1)
+		if len(s1.Genomes) > 0 {
+			strains = append(strains, s1)
+		}
+
 	}
 
 	return
 }
 
-func listScaffoldFiles(path string) []string {
+func listScaffoldFiles(path string) (genomes []string) {
 	fileInfors, err := ioutil.ReadDir(path)
 	if err != nil {
-		ERROR.Panic(err)
+		WARN.Println(err)
+		return
 	}
 
 	scaffoldNameSet := make(map[string]bool)
@@ -181,12 +185,11 @@ func listScaffoldFiles(path string) []string {
 		}
 	}
 
-	names := []string{}
 	for name, _ := range scaffoldNameSet {
-		names = append(names, name)
+		genomes = append(genomes, name)
 	}
 
-	return names
+	return
 }
 
 // find species for a strain given its taxid.
