@@ -28,8 +28,6 @@ func (cmd *cmdCovReads) Run(args []string) {
 	MakeDir(filepath.Join(*cmd.workspace, cmd.covOutBase))
 
 	for _, strains := range cmd.speciesMap {
-		// Make position profiles.
-		meta.GenomePosProfiling(strains, cmd.refBase)
 
 		// For each strain.
 		for _, s := range strains {

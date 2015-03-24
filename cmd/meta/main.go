@@ -29,6 +29,7 @@ func main() {
 	command.On("bowtie2_align", "align reads using bowtie2", &cmdAlignReads{}, args)
 	command.On("estimate", "estimate r/m", &cmdEstimate{}, args)
 	command.On("scaffold_merge", "merge scaffolds", &cmdScaffoldMerge{}, args)
+	command.On("genome_profile", "genome position profiling", &cmdGenomeProfile{}, args)
 
 	// Parse and run commands.
 	command.ParseAndRun()

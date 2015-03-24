@@ -24,9 +24,6 @@ func (cmd *cmdCovGenomes) Run(args []string) {
 	MakeDir(filepath.Join(*cmd.workspace, cmd.covOutBase))
 
 	for prefix, strains := range cmd.speciesMap {
-		// Make position profiles.
-		meta.GenomePosProfiling(strains, cmd.refBase)
-
 		// Read alignments.
 		alignments := cmd.ReadAlignments(prefix)
 
