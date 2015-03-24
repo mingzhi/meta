@@ -22,16 +22,21 @@ func (cmd *cmdOrthoMCL) Run(args []string) {
 	MakeDir(filepath.Join(*cmd.workspace, cmd.orthoOutBase))
 
 	for prefix, strains := range cmd.speciesMap {
-		INFO.Printf("%s\n", prefix)
-		// OrthoMCL
-		clusters := meta.OrthoMCl(strains, cmd.refBase)
+		if len(strains) >= 3 {
+			INFO.Printf("%s\n", prefix)
+			// OrthoMCL
+			clusters := meta.OrthoMCl(strains, cmd.refBase)
 
-		// Write clusters into a file.
-		cmd.writeClusters(prefix, clusters)
+			// Write clusters into a file.
+			cmd.writeClusters(prefix, clusters)
 
-		// Find ortholog sequences.
-		groups := meta.FindOrthologs(strains, cmd.refBase, clusters)
-		cmd.writeOrthologs(prefix, groups)
+			// Find ortholog sequences.
+			groups := meta.FindOrthologs(strains, cmd.refBase, clusters)
+			cmd.writeOrthologs(prefix, groups)
+		} else {
+			WARN.Printf("%s only has %d strains!\n", prefix, len(strains))
+		}
+
 	}
 
 }

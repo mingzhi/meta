@@ -24,48 +24,53 @@ func (cmd *cmdOrthoAln) Run(args []string) {
 		// Read ortholog groups.
 		groups := cmd.ReadOrhtologs(prefix)
 
-		// Create a job for each sequence records.
-		jobs := make(chan ncbiutils.SeqRecords)
-		go func() {
-			defer close(jobs)
-			for _, cluster := range groups {
-				if len(cluster) >= 3 {
-					jobs <- cluster
-				}
-			}
-		}()
-
-		// Create workers to do jobs.
-		// done is signal channel.
-		done := make(chan bool)
-		// results is a channel for aligned sequence records.
-		results := make(chan ncbiutils.SeqRecords)
-		for i := 0; i < *cmd.ncpu; i++ {
+		if len(groups) > 0 {
+			// Create a job for each sequence records.
+			jobs := make(chan ncbiutils.SeqRecords)
 			go func() {
-				for cluster := range jobs {
-					aln := meta.MultiAlign(cluster, meta.Muscle)
-					results <- aln
+				defer close(jobs)
+				for _, cluster := range groups {
+					if len(cluster) >= 3 {
+						jobs <- cluster
+					}
 				}
-				done <- true
 			}()
-		}
 
-		// Waiting and checking done signal.
-		go func() {
-			defer close(results)
+			// Create workers to do jobs.
+			// done is signal channel.
+			done := make(chan bool)
+			// results is a channel for aligned sequence records.
+			results := make(chan ncbiutils.SeqRecords)
 			for i := 0; i < *cmd.ncpu; i++ {
-				<-done
+				go func() {
+					for cluster := range jobs {
+						aln := meta.MultiAlign(cluster, meta.Muscle)
+						results <- aln
+					}
+					done <- true
+				}()
 			}
-		}()
 
-		// Collected aligned sequence records.
-		alns := []ncbiutils.SeqRecords{}
-		for aln := range results {
-			alns = append(alns, aln)
+			// Waiting and checking done signal.
+			go func() {
+				defer close(results)
+				for i := 0; i < *cmd.ncpu; i++ {
+					<-done
+				}
+			}()
+
+			// Collected aligned sequence records.
+			alns := []ncbiutils.SeqRecords{}
+			for aln := range results {
+				alns = append(alns, aln)
+			}
+
+			// Save aligned results into a json file.
+			cmd.SaveAlignments(prefix, alns)
+		} else {
+			WARN.Printf("%s has zero orthologous cluster\n", prefix)
 		}
 
-		// Save aligned results into a json file.
-		cmd.SaveAlignments(prefix, alns)
 	}
 
 }
@@ -76,7 +81,8 @@ func (cmd *cmdOrthoAln) ReadOrhtologs(prefix string) (groups []ncbiutils.SeqReco
 		fileName)
 	r, err := os.Open(filePath)
 	if err != nil {
-		ERROR.Fatalln(err)
+		WARN.Println(err)
+		return
 	}
 	defer r.Close()
 

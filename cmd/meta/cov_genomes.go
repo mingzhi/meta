@@ -30,9 +30,14 @@ func (cmd *cmdCovGenomes) Run(args []string) {
 		// Read alignments.
 		alignments := cmd.ReadAlignments(prefix)
 
-		for _, pos := range cmd.positions {
-			cmd.RunOne(strains, alignments, pos)
+		if len(alignments) > 0 {
+			for _, pos := range cmd.positions {
+				cmd.RunOne(strains, alignments, pos)
+			}
+		} else {
+			WARN.Printf("%s has zero alignments\n", prefix)
 		}
+
 	}
 
 }
@@ -112,7 +117,8 @@ func (cmd *cmdCovGenomes) ReadAlignments(prefix string) (alns []ncbiutils.SeqRec
 		fileName)
 	r, err := os.Open(filePath)
 	if err != nil {
-		ERROR.Fatalln(err)
+		WARN.Println(err)
+		return
 	}
 	defer r.Close()
 
