@@ -5,7 +5,7 @@ import (
 	"github.com/mingzhi/ncbiutils"
 	"log"
 	"os"
-	"strings"
+	"regexp"
 )
 
 func ReadSpeciesMap(fileName string) map[string][]Strain {
@@ -61,5 +61,6 @@ func ReadStrains(fileName string) (strains []Strain) {
 
 // Find and clean reference genome accession.
 func FindRefAcc(name string) string {
-	return (strings.Split(name, ".")[0])
+	r := regexp.MustCompile("\\w\\w_\\w+\\d+")
+	return r.FindString(name)
 }
