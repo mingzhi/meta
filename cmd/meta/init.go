@@ -6,9 +6,11 @@ import (
 	"github.com/mingzhi/meta"
 	"github.com/mingzhi/ncbiftp/genomes/reports"
 	"github.com/mingzhi/ncbiftp/taxonomy"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 )
 
 // This command generate necessary strain information.
@@ -34,7 +36,7 @@ func (cmd *cmdInit) Run(args []string) {
 	// or the one is older than summary.txt,
 	// create a new one.
 	var strains []meta.Strain
-	strains = getStrainInfors(cmd.repBase, cmd.taxBase)
+	strains = getStrainInfors(cmd.refBase, cmd.repBase, cmd.taxBase)
 	w, err := os.Create(filepath.Join(*cmd.workspace, "reference_strains.json"))
 	if err != nil {
 		ERROR.Fatalln(err)
@@ -109,7 +111,7 @@ func isReferenceStrainsExists(workspace, repBase string) (isExist bool) {
 
 // get strain informations
 // from GENOME_REPORTS
-func getStrainInfors(repBase, taxBase string) (strains []meta.Strain) {
+func getStrainInfors(refBase, repBase, taxBase string) (strains []meta.Strain) {
 	// Read prokaryotes strains.
 	fileName := "prokaryotes.txt"
 	filePath := filepath.Join(repBase, fileName)
@@ -124,7 +126,7 @@ func getStrainInfors(repBase, taxBase string) (strains []meta.Strain) {
 	taxonMap := taxonomy.ReadTaxas(taxBase)
 	for i := 0; i < len(reportStrains); i++ {
 		s := reportStrains[i]
-		if s.Status != "Complete Genome" || s.Path == "-" {
+		if s.Path == "-" {
 			continue
 		}
 		s1 := meta.Strain{}
@@ -132,24 +134,59 @@ func getStrainInfors(repBase, taxBase string) (strains []meta.Strain) {
 		s1.Path = s.Path
 		s1.ProjectId = s.ProjectId
 		s1.TaxId = s.TaxId
+		s1.Status = s.Status
+
 		taxon, found := taxonMap[s1.TaxId]
 		if found {
 			s1.GeneticCode = taxon.GeneticCode.Id
 			s1.Species = getSpeciesName(s1.TaxId, taxonMap)
 		}
 
-		for j := 0; j < len(s.Genomes); j++ {
-			g1 := s.Genomes[j]
-			g2 := meta.Genome{}
-			g2.Accession = g1.Accession
-			g2.Replicon = "chromosome"
-			s1.Genomes = append(s1.Genomes, g2)
+		if len(s.Genomes) > 0 {
+			for j := 0; j < len(s.Genomes); j++ {
+				g1 := s.Genomes[j]
+				g2 := meta.Genome{}
+				g2.Accession = g1.Accession
+				g2.Replicon = "chromosome"
+				s1.Genomes = append(s1.Genomes, g2)
+			}
+		} else {
+			path := filepath.Join(refBase, s.Path)
+			genomes := listScaffoldFiles(path)
+			for _, g := range genomes {
+				g2 := meta.Genome{}
+				g2.Accession = g
+				g2.Replicon = "chromosome"
+				s1.Genomes = append(s1.Genomes, g2)
+			}
 		}
 
 		strains = append(strains, s1)
 	}
 
 	return
+}
+
+func listScaffoldFiles(path string) []string {
+	fileInfors, err := ioutil.ReadDir(path)
+	if err != nil {
+		ERROR.Panic(err)
+	}
+
+	scaffoldNameSet := make(map[string]bool)
+	for _, fi := range fileInfors {
+		if strings.Contains(fi.Name(), "fna.tgz") {
+			name := strings.Split(fi.Name(), ".")[0]
+			scaffoldNameSet[name] = true
+		}
+	}
+
+	names := []string{}
+	for name, _ := range scaffoldNameSet {
+		names = append(names, name)
+	}
+
+	return names
 }
 
 // find species for a strain given its taxid.
