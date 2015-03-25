@@ -13,6 +13,7 @@ type CovResult struct {
 	CtIndices []int
 	CtN       []int
 	N         int
+	NReads    int
 }
 
 func MakeDir(d string) {
@@ -31,14 +32,16 @@ func registerLogger() {
 func save2Json(cr CovResult, fileName string) {
 	f, err := os.Create(fileName)
 	if err != nil {
-		ERROR.Fatalln(err)
+		ERROR.Panicln(err)
 	}
 	defer f.Close()
 
 	ec := json.NewEncoder(f)
 	if err := ec.Encode(cr); err != nil {
 		ERROR.Println(cr)
-		ERROR.Fatalln(err)
+		ERROR.Printf("Ks: %f\n", cr.Ks)
+		ERROR.Printf("VarKs: %f\n", cr.VarKs)
+		ERROR.Panicln(err)
 	}
 }
 
