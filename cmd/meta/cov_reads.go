@@ -24,17 +24,20 @@ type cmdCovReads struct {
 func (cmd *cmdCovReads) Run(args []string) {
 	// Parse config and settings.
 	cmd.ParseConfig()
+	// Load species:strains map.
 	cmd.LoadSpeciesMap()
+	// Make cov output diretory.
 	MakeDir(filepath.Join(*cmd.workspace, cmd.covOutBase))
 
 	for _, strains := range cmd.speciesMap {
-
 		// For each strain.
 		for _, s := range strains {
+			// Make specific output folder.
 			MakeDir(filepath.Join(*cmd.workspace, cmd.covOutBase, s.Path))
 			for _, genome := range s.Genomes {
-				// We only work on chromosome genomes.
+				// [TODO] Now we only work on chromosome genomes.
 				if isChromosome(genome.Replicon) {
+					// Clear RefSeq accession (remove .version and such).
 					acc := meta.FindRefAcc(genome.Accession)
 					// Read records of reads from a "sam" file.
 					samFileName := acc + bowtiedSamAppendix
@@ -57,6 +60,7 @@ func (cmd *cmdCovReads) Run(args []string) {
 
 							// paired end reads and sorted.
 							matedReads := meta.GetPairedEndReads(records)
+							INFO.Printf("%s has %d mated reads.\n", samFilePath, len(matedReads))
 
 							for _, funcName := range cmd.covReadsFunctions {
 								// Assign cov read function.
@@ -78,13 +82,18 @@ func (cmd *cmdCovReads) Run(args []string) {
 										funcName, pos)
 									filePath := filepath.Join(*cmd.workspace, cmd.covOutBase, s.Path,
 										filePrefix+".json")
-									save2Json(res, filePath)
+									if !math.IsNaN(res.VarKs) {
+										save2Json(res, filePath)
+									} else {
+										WARN.Printf("%s: VarKs: NaN\n", filePath)
+									}
+
 								}
 							}
 
 						}
 					} else {
-						ERROR.Panicf("Cannot find sam file: %s\n", samFilePath)
+						WARN.Printf("Cannot find sam file: %s\n", samFilePath)
 					}
 				}
 			}
