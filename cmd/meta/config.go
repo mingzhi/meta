@@ -205,10 +205,26 @@ func (cmd *cmdConfig) LoadSpeciesMap() {
 		for _, strainPath := range strainPaths {
 			strain, found := strainMap[strainPath]
 			if found {
-				cmd.speciesMap[prefix] = append(cmd.speciesMap[prefix], strain)
+				if cmd.checkStrain(strain) {
+					cmd.speciesMap[prefix] = append(cmd.speciesMap[prefix], strain)
+					INFO.Println(strain.Path)
+				}
 			} else {
-				INFO.Printf("Cannot find %s\n", strainPath)
+				WARN.Printf("Cannot find %s\n", strainPath)
 			}
 		}
 	}
+}
+
+func (cmd *cmdConfig) checkStrain(s meta.Strain) bool {
+	for _, g := range s.Genomes {
+		fileName := meta.FindRefAcc(g.Accession) + ".fna"
+		filePath := filepath.Join(cmd.refBase, s.Path, fileName)
+		if _, err := os.Stat(filePath); err != nil {
+			WARN.Println(err)
+			return false
+		}
+	}
+
+	return true
 }

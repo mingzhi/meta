@@ -46,6 +46,8 @@ func CovReadsGenome(matedReads PairedEndReads, genome Genome, maxl, pos int) (kc
 				rec := j.r
 				// mapped paired end read to the reference genome.
 				read := mated2Ref(rec)
+				Info.Println(len(read))
+
 				if rec.ReadLeft.Pos+len(read) <= len(genome.Seq) {
 					start := rec.ReadLeft.Pos
 					end := rec.ReadLeft.Pos + len(read)

@@ -56,7 +56,8 @@ func bowtieBuildIndex(strain meta.Strain, refDir string) {
 		stderr := new(bytes.Buffer)
 		cmd.Stderr = stderr
 		if err := cmd.Run(); err != nil {
-			ERROR.Fatalln(string(stderr.Bytes()))
+			ERROR.Println(string(stderr.Bytes()))
+			ERROR.Panic(err)
 		}
 	}
 }

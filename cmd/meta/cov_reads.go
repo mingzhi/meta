@@ -60,8 +60,6 @@ func (cmd *cmdCovReads) Run(args []string) {
 
 							// paired end reads and sorted.
 							matedReads := meta.GetPairedEndReads(records)
-							INFO.Printf("%s has %d mated reads.\n", samFilePath, len(matedReads))
-
 							for _, funcName := range cmd.covReadsFunctions {
 								// Assign cov read function.
 								switch funcName {
