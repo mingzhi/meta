@@ -197,7 +197,7 @@ func getStrainInfors(refBase, repBase, taxBase string) (strains []strain.Strain)
 	}
 
 	go func() {
-		close(results)
+		defer close(results)
 		for i := 0; i < ncpu; i++ {
 			<-done
 		}
