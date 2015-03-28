@@ -11,6 +11,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 )
@@ -137,47 +138,75 @@ func getStrainInfors(refBase, repBase, taxBase string) (strains []strain.Strain)
 
 	// add genetic code information to each strain.
 	taxonMap := taxonomy.ReadTaxas(taxBase)
-	for i := 0; i < len(reportStrains); i++ {
-		s := reportStrains[i]
-		if s.Path == "-" {
-			continue
-		}
-		s1 := strain.Strain{}
-		s1.Name = s.Name
-		s1.Path = s.Path
-		s1.ProjectId = s.ProjectId
-		s1.TaxId = s.TaxId
-		s1.Status = s.Status
 
-		taxon, found := taxonMap[s1.TaxId]
-		if found {
-			s1.GeneticCode = taxon.GeneticCode.Id
-			s1.Species = getSpeciesName(s1.TaxId, taxonMap)
+	jobs := make(chan reports.Strain)
+	go func() {
+		defer close(jobs)
+		for i := 0; i < len(reportStrains); i++ {
+			jobs <- reportStrains[i]
 		}
+	}()
 
+	ncpu := runtime.GOMAXPROCS(0)
+
+	results := make(chan strain.Strain)
+	done := make(chan bool)
+	for i := 0; i < ncpu; i++ {
+		go func() {
+			for s := range jobs {
+				if s.Path == "-" {
+					continue
+				}
+				s1 := strain.Strain{}
+				s1.Name = s.Name
+				s1.Path = s.Path
+				s1.ProjectId = s.ProjectId
+				s1.TaxId = s.TaxId
+				s1.Status = s.Status
+
+				taxon, found := taxonMap[s1.TaxId]
+				if found {
+					s1.GeneticCode = taxon.GeneticCode.Id
+					s1.Species = getSpeciesName(s1.TaxId, taxonMap)
+				}
+
+				if len(s.Genomes) > 0 {
+					for j := 0; j < len(s.Genomes); j++ {
+						g1 := s.Genomes[j]
+						g2 := genome.Genome{}
+						g2.Accession = g1.Accession
+						g2.Replicon = "chromosome"
+						s1.Genomes = append(s1.Genomes, g2)
+					}
+				} else {
+					path := filepath.Join(refBase, s.Path)
+					genomes := listScaffoldFiles(path)
+					for _, g := range genomes {
+						g2 := genome.Genome{}
+						g2.Accession = g
+						g2.Replicon = "chromosome"
+						s1.Genomes = append(s1.Genomes, g2)
+					}
+				}
+
+				results <- s1
+			}
+
+			done <- true
+		}()
+	}
+
+	go func() {
+		close(results)
+		for i := 0; i < ncpu; i++ {
+			<-done
+		}
+	}()
+
+	for s := range results {
 		if len(s.Genomes) > 0 {
-			for j := 0; j < len(s.Genomes); j++ {
-				g1 := s.Genomes[j]
-				g2 := genome.Genome{}
-				g2.Accession = g1.Accession
-				g2.Replicon = "chromosome"
-				s1.Genomes = append(s1.Genomes, g2)
-			}
-		} else {
-			path := filepath.Join(refBase, s.Path)
-			genomes := listScaffoldFiles(path)
-			for _, g := range genomes {
-				g2 := genome.Genome{}
-				g2.Accession = g
-				g2.Replicon = "chromosome"
-				s1.Genomes = append(s1.Genomes, g2)
-			}
+			strains = append(strains, s)
 		}
-
-		if len(s1.Genomes) > 0 {
-			strains = append(strains, s1)
-		}
-
 	}
 
 	return
