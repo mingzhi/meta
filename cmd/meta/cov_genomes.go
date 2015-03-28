@@ -3,8 +3,10 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/mingzhi/meta"
-	"github.com/mingzhi/ncbiutils"
+	"github.com/mingzhi/meta/cov"
+	"github.com/mingzhi/meta/genome"
+	"github.com/mingzhi/meta/strain"
+	"github.com/mingzhi/ncbiftp/seqrecord"
 	"math"
 	"os"
 	"path/filepath"
@@ -16,39 +18,55 @@ type cmdCovGenomes struct {
 	cmdConfig // embed cmdConfig
 }
 
-// Run command.
-func (cmd *cmdCovGenomes) Run(args []string) {
+func (cmd *cmdCovGenomes) Init() {
 	// Parse config and settings.
 	cmd.ParseConfig()
+	// Load species map.
 	cmd.LoadSpeciesMap()
+	// Make output directory.
 	MakeDir(filepath.Join(*cmd.workspace, cmd.covOutBase))
+	// Check profile positions.
+	if len(cmd.positions) == 0 {
+		WARN.Println("Use default position: 4!")
+		cmd.positions = append(cmd.positions, 4)
+	}
+}
 
+// Run command.
+func (cmd *cmdCovGenomes) Run(args []string) {
+	// Initialize.
+	cmd.Init()
+
+	// For each species in the species map.
 	for prefix, strains := range cmd.speciesMap {
 		// Read alignments.
 		alignments := cmd.ReadAlignments(prefix)
 
-		if len(alignments) > 0 {
-			for _, pos := range cmd.positions {
-				cmd.RunOne(strains, alignments, pos)
-			}
-		} else {
-			WARN.Printf("%s has zero alignments\n", prefix)
+		// If zero alignments, skip it.
+		if len(alignments) == 0 {
+			WARN.Printf("%s has zero alignments.\n", prefix)
+			continue
 		}
 
+		// For each position, do the calculation.
+		for _, pos := range cmd.positions {
+			cmd.RunOne(strains, alignments, pos)
+		}
 	}
 
 }
 
-func (cmd *cmdCovGenomes) RunOne(strains []meta.Strain, alignments []ncbiutils.SeqRecords, pos int) {
+func (cmd *cmdCovGenomes) RunOne(strains []strain.Strain, alignments []seqrecord.SeqRecords, pos int) {
 	// For each strain (genome), create a job.
 	type job struct {
-		strain meta.Strain
-		genome meta.Genome
+		strain strain.Strain
+		genome genome.Genome
 	}
 	jobs := make(chan job)
 	go func() {
 		defer close(jobs)
 		for _, strain := range strains {
+			// Create output directory.
 			MakeDir(filepath.Join(*cmd.workspace, cmd.covOutBase, strain.Path))
 			for _, genome := range strain.Genomes {
 				if isChromosome(genome.Replicon) {
@@ -62,20 +80,16 @@ func (cmd *cmdCovGenomes) RunOne(strains []meta.Strain, alignments []ncbiutils.S
 	for i := 0; i < *cmd.ncpu; i++ {
 		go func() {
 			for job := range jobs {
-				strain := job.strain
-				genome := job.genome
-				// Read position profile for the genome.
-				posFileName := meta.FindRefAcc(genome.Accession) + ".pos"
-				posFilePath := filepath.Join(cmd.refBase, strain.Path, posFileName)
-				genome.PosProfile = meta.ReadPosProfile(posFilePath)
-				// Read sequence for the genome.
-				fnaFileName := meta.FindRefAcc(genome.Accession) + ".fna"
-				fnaFilePath := filepath.Join(cmd.refBase, strain.Path, fnaFileName)
-				genome.Seq = meta.ReadFasta(fnaFilePath).Seq
+				s := job.strain
+				g := job.genome
+				// base folder of the strain.
+				base := filepath.Join(cmd.refBase, s.Path)
+				genome.LoadFna(&g, base)
+				genome.LoadProfile(&g, base)
 
-				covGenomesFuncs := []meta.CovGenomesFunc{
-					meta.CovGenomesGenome,
-					meta.CovGenomesGenomes,
+				covGenomesFuncs := []cov.GenomesFunc{
+					cov.GenomesVsGenome,
+					cov.GenomesVsGenomes,
 				}
 
 				covGenomesFuncNames := []string{
@@ -83,15 +97,13 @@ func (cmd *cmdCovGenomes) RunOne(strains []meta.Strain, alignments []ncbiutils.S
 					"Cov_Genomes_vs_Genomes",
 				}
 
-				acc := meta.FindRefAcc(genome.Accession)
-
 				for j, covGenomesFunc := range covGenomesFuncs {
 					funcType := covGenomesFuncNames[j]
-					res := cmd.Cov(alignments, genome, pos, covGenomesFunc)
+					res := cmd.Cov(alignments, g, pos, covGenomesFunc)
 					// Write result to files.
-					filePrefix := fmt.Sprintf("%s_%s_pos%d", acc,
+					filePrefix := fmt.Sprintf("%s_%s_pos%d", g.RefAcc(),
 						funcType, pos)
-					filePath := filepath.Join(*cmd.workspace, cmd.covOutBase, strain.Path,
+					filePath := filepath.Join(*cmd.workspace, cmd.covOutBase, s.Path,
 						filePrefix+".json")
 					save2Json(res, filePath)
 				}
@@ -108,7 +120,7 @@ func (cmd *cmdCovGenomes) RunOne(strains []meta.Strain, alignments []ncbiutils.S
 }
 
 // Load alignments.
-func (cmd *cmdCovGenomes) ReadAlignments(prefix string) (alns []ncbiutils.SeqRecords) {
+func (cmd *cmdCovGenomes) ReadAlignments(prefix string) (alns []seqrecord.SeqRecords) {
 	fileName := prefix + "_orthologs_aligned.json"
 	filePath := filepath.Join(*cmd.workspace, cmd.orthoOutBase,
 		fileName)
@@ -129,9 +141,9 @@ func (cmd *cmdCovGenomes) ReadAlignments(prefix string) (alns []ncbiutils.SeqRec
 }
 
 // Calculate covariances for records.
-func (cmd *cmdCovGenomes) Cov(records []ncbiutils.SeqRecords,
-	genome meta.Genome, pos int, covGenomesFunc meta.CovGenomesFunc) (res CovResult) {
-	kc, cc := covGenomesFunc(records, genome, cmd.maxl, pos)
+func (cmd *cmdCovGenomes) Cov(records []seqrecord.SeqRecords,
+	g genome.Genome, pos int, covGenomesFunc cov.GenomesFunc) (res CovResult) {
+	kc, cc := covGenomesFunc(records, g, cmd.maxl, pos)
 
 	// Process and return a cov result.
 	res.Ks = kc.Mean.GetResult()

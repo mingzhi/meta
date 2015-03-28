@@ -1,15 +1,14 @@
-package meta
+package ortho
 
 import (
-	"github.com/mingzhi/ncbiutils"
+	"github.com/mingzhi/meta/strain"
+	"github.com/mingzhi/ncbiftp/seqrecord"
 	"path/filepath"
 	"runtime"
 )
 
-var GCMAP map[string]*ncbiutils.GeneticCode
-
 // Return sequence records for each ortholog clusters.
-func FindOrthologs(strains []Strain, dir string, clusters [][]string) []ncbiutils.SeqRecords {
+func FindOrthologs(strains []strain.Strain, dir string, clusters [][]string) []seqrecord.SeqRecords {
 	// Load sequence records for each genome.
 	ncpu := runtime.GOMAXPROCS(0)
 	jobs := make(chan []string)
@@ -25,12 +24,12 @@ func FindOrthologs(strains []Strain, dir string, clusters [][]string) []ncbiutil
 	}()
 
 	done := make(chan bool)
-	results := make(chan ncbiutils.SeqRecords)
+	results := make(chan seqrecord.SeqRecords)
 	for i := 0; i < ncpu; i++ {
 		go func() {
 			for job := range jobs {
 				g, d, gc := job[0], job[1], job[2]
-				records := ncbiutils.ReadSeqRecords(g, d, gc)
+				records := seqrecord.ReadSeqRecords(g, d, gc)
 				results <- records
 			}
 			done <- true
@@ -44,16 +43,16 @@ func FindOrthologs(strains []Strain, dir string, clusters [][]string) []ncbiutil
 		close(results)
 	}()
 
-	recMap := make(map[string]ncbiutils.SeqRecord)
+	recMap := make(map[string]seqrecord.SeqRecord)
 	for rec := range results {
 		for _, r := range rec {
 			recMap[r.Id+"|"+r.Genome] = r
 		}
 	}
 
-	oGroups := []ncbiutils.SeqRecords{}
+	oGroups := []seqrecord.SeqRecords{}
 	for _, cluster := range clusters {
-		grp := ncbiutils.SeqRecords{}
+		grp := seqrecord.SeqRecords{}
 		for _, s := range cluster {
 			r, found := recMap[s]
 			if found {

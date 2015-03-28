@@ -6,7 +6,7 @@ import (
 	"github.com/gonum/plot/plotter"
 	"github.com/gonum/plot/vg"
 	"github.com/mingzhi/gomath/stat/regression"
-	"github.com/mingzhi/meta"
+	"github.com/mingzhi/meta/strain"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -15,7 +15,7 @@ import (
 type Estimation struct {
 	FuncName string
 	Pos      int
-	Strain   meta.Strain
+	Strain   strain.Strain
 	Ks       float64
 	RM       float64
 	RSquare  float64
@@ -31,14 +31,14 @@ type cmdEstimate struct {
 func (cmd *cmdEstimate) Run(args []string) {
 	cmd.ParseConfig()
 	cmd.LoadSpeciesMap()
-	MakeDir(filepath.Join(*cmd.workspace, cmd.plotBase))
+	MakeDir(filepath.Join(*cmd.workspace, cmd.plotOutBase))
 
 	INFO.Printf("Fitting Range: %d - %d\n", cmd.fitStart, cmd.fitEnd)
 	INFO.Printf("Fitting RSquare Cutoff: %.3f\n", cmd.fitRSquare)
 
 	for prefix, strains := range cmd.speciesMap {
 		estimations := []Estimation{}
-		for _, funcName := range cmd.covReadsFunctions {
+		for _, funcName := range cmd.covReadsFuncs {
 			for _, pos := range cmd.positions {
 				if pos != 4 {
 					continue
@@ -142,7 +142,7 @@ func (cmd *cmdEstimate) Plot(title string, estimations []Estimation) {
 	p.NominalX(names...)
 
 	fileName := title + ".pdf"
-	filePath := filepath.Join(*cmd.workspace, cmd.plotBase, fileName)
+	filePath := filepath.Join(*cmd.workspace, cmd.plotOutBase, fileName)
 	if err := p.Save(6, 4, filePath); err != nil {
 		panic(err)
 	}

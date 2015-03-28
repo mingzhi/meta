@@ -2,8 +2,6 @@ package main
 
 import (
 	"encoding/json"
-	"github.com/mingzhi/meta"
-	"log"
 	"os"
 )
 
@@ -21,11 +19,6 @@ func MakeDir(d string) {
 	if err != nil {
 		ERROR.Fatalln(err)
 	}
-}
-
-func registerLogger() {
-	meta.Info = log.New(os.Stdout, "INFO: ", log.Ldate|log.Ltime|log.Lshortfile)
-	meta.Warn = log.New(os.Stdout, "WARN: ", log.Ldate|log.Ltime|log.Lshortfile)
 }
 
 // Save cov result to a json file.

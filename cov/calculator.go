@@ -1,4 +1,4 @@
-package meta
+package cov
 
 import (
 	"github.com/mingzhi/gomath/stat/correlation"

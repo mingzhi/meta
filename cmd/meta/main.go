@@ -17,7 +17,7 @@ func main() {
 	INFO = log.New(os.Stdout, "INFO: ", log.Ldate|log.Ltime|log.Lshortfile)
 	WARN = log.New(os.Stdout, "WARN: ", log.Ldate|log.Ltime|log.Lshortfile)
 	ERROR = log.New(os.Stderr, "ERROR:", log.Ldate|log.Ltime|log.Lshortfile)
-	registerLogger()
+
 	// Register commands.
 	args := []string{}
 	command.On("init", "generate strain information", &cmdInit{}, args)

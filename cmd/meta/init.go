@@ -2,8 +2,10 @@ package main
 
 import (
 	"encoding/json"
+	"flag"
 	"fmt"
-	"github.com/mingzhi/meta"
+	"github.com/mingzhi/meta/genome"
+	"github.com/mingzhi/meta/strain"
 	"github.com/mingzhi/ncbiftp/genomes/reports"
 	"github.com/mingzhi/ncbiftp/taxonomy"
 	"io/ioutil"
@@ -15,7 +17,14 @@ import (
 
 // This command generate necessary strain information.
 type cmdInit struct {
+	complete  *bool
 	cmdConfig // embed cmdConfig
+}
+
+func (cmd *cmdInit) Flags(fs *flag.FlagSet) *flag.FlagSet {
+	cmd.cmdConfig.Flags(fs)
+	cmd.complete = fs.Bool("complete", false, "only generate completed species map?")
+	return fs
 }
 
 // Run command.
@@ -35,7 +44,7 @@ func (cmd *cmdInit) Run(args []string) {
 	// If there is no file containing strain informations,
 	// or the one is older than summary.txt,
 	// create a new one.
-	var strains []meta.Strain
+	var strains []strain.Strain
 	strains = getStrainInfors(cmd.refBase, cmd.repBase, cmd.taxBase)
 	w, err := os.Create(filepath.Join(*cmd.workspace, "reference_strains.json"))
 	if err != nil {
@@ -49,10 +58,14 @@ func (cmd *cmdInit) Run(args []string) {
 	}
 
 	// Create a specie: []strain map.
-	speciesMap := make(map[string][]meta.Strain)
+	speciesMap := make(map[string][]strain.Strain)
 	for _, s := range strains {
 		if s.Species != "" {
-			speciesMap[s.Species] = append(speciesMap[s.Species], s)
+			if *cmd.complete {
+				if strings.Contains(strings.ToLower(s.Status), "complete") {
+					speciesMap[s.Species] = append(speciesMap[s.Species], s)
+				}
+			}
 		}
 	}
 
@@ -111,7 +124,7 @@ func isReferenceStrainsExists(workspace, repBase string) (isExist bool) {
 
 // get strain informations
 // from GENOME_REPORTS
-func getStrainInfors(refBase, repBase, taxBase string) (strains []meta.Strain) {
+func getStrainInfors(refBase, repBase, taxBase string) (strains []strain.Strain) {
 	// Read prokaryotes strains.
 	fileName := "prokaryotes.txt"
 	filePath := filepath.Join(repBase, fileName)
@@ -129,7 +142,7 @@ func getStrainInfors(refBase, repBase, taxBase string) (strains []meta.Strain) {
 		if s.Path == "-" {
 			continue
 		}
-		s1 := meta.Strain{}
+		s1 := strain.Strain{}
 		s1.Name = s.Name
 		s1.Path = s.Path
 		s1.ProjectId = s.ProjectId
@@ -145,7 +158,7 @@ func getStrainInfors(refBase, repBase, taxBase string) (strains []meta.Strain) {
 		if len(s.Genomes) > 0 {
 			for j := 0; j < len(s.Genomes); j++ {
 				g1 := s.Genomes[j]
-				g2 := meta.Genome{}
+				g2 := genome.Genome{}
 				g2.Accession = g1.Accession
 				g2.Replicon = "chromosome"
 				s1.Genomes = append(s1.Genomes, g2)
@@ -154,7 +167,7 @@ func getStrainInfors(refBase, repBase, taxBase string) (strains []meta.Strain) {
 			path := filepath.Join(refBase, s.Path)
 			genomes := listScaffoldFiles(path)
 			for _, g := range genomes {
-				g2 := meta.Genome{}
+				g2 := genome.Genome{}
 				g2.Accession = g
 				g2.Replicon = "chromosome"
 				s1.Genomes = append(s1.Genomes, g2)

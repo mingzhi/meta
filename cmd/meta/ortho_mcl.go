@@ -2,8 +2,8 @@ package main
 
 import (
 	"encoding/json"
-	"github.com/mingzhi/meta"
-	"github.com/mingzhi/ncbiutils"
+	"github.com/mingzhi/meta/ortho"
+	"github.com/mingzhi/ncbiftp/seqrecord"
 	"os"
 	"path/filepath"
 	"strings"
@@ -25,13 +25,13 @@ func (cmd *cmdOrthoMCL) Run(args []string) {
 		if len(strains) >= 3 {
 			INFO.Printf("%s\n", prefix)
 			// OrthoMCL
-			clusters := meta.OrthoMCl(strains, cmd.refBase)
+			clusters := ortho.OrthoMCl(strains, cmd.refBase)
 
 			// Write clusters into a file.
 			cmd.writeClusters(prefix, clusters)
 
 			// Find ortholog sequences.
-			groups := meta.FindOrthologs(strains, cmd.refBase, clusters)
+			groups := ortho.FindOrthologs(strains, cmd.refBase, clusters)
 			cmd.writeOrthologs(prefix, groups)
 		} else {
 			WARN.Printf("%s only has %d strains!\n", prefix, len(strains))
@@ -55,7 +55,7 @@ func (cmd *cmdOrthoMCL) writeClusters(prefix string, clusters [][]string) {
 	}
 }
 
-func (cmd *cmdOrthoMCL) writeOrthologs(prefix string, groups []ncbiutils.SeqRecords) {
+func (cmd *cmdOrthoMCL) writeOrthologs(prefix string, groups []seqrecord.SeqRecords) {
 	fileName := prefix + "_orthologs.json"
 	filePath := filepath.Join(*cmd.workspace, cmd.orthoOutBase, fileName)
 	w, err := os.Create(filePath)

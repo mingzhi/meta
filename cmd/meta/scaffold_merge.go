@@ -7,7 +7,7 @@ import (
 	"compress/gzip"
 	"fmt"
 	"github.com/mingzhi/biogo/seq"
-	"github.com/mingzhi/meta"
+	"github.com/mingzhi/meta/strain"
 	"io"
 	"os"
 	"path/filepath"
@@ -43,7 +43,7 @@ func (cmd *cmdScaffoldMerge) Run(args []string) {
 				if !stringInSlice(strings.TrimSpace(s.Status), completed) {
 					path := filepath.Join(cmd.refBase, s.Path)
 					for _, genome := range s.Genomes {
-						acc := meta.FindRefAcc(genome.Accession)
+						acc := genome.RefAcc()
 						jobs <- job{acc, path}
 					}
 				}
@@ -78,7 +78,7 @@ func (cmd *cmdScaffoldMerge) Run(args []string) {
 func (cmd *cmdScaffoldMerge) LoadSpeciesMap() {
 	// If reference_strains exists, read it,
 	// else generate it.
-	var strains []meta.Strain
+	var strains []strain.Strain
 	if isReferenceStrainsExists(*cmd.workspace, cmd.repBase) {
 		strains = cmd.ReadReferenceStrains()
 	} else {
@@ -87,7 +87,7 @@ func (cmd *cmdScaffoldMerge) LoadSpeciesMap() {
 
 	// Make a strain map,
 	// strain.path: strain
-	strainMap := make(map[string]meta.Strain)
+	strainMap := make(map[string]strain.Strain)
 	for _, strain := range strains {
 		strainMap[strain.Path] = strain
 	}
@@ -96,7 +96,7 @@ func (cmd *cmdScaffoldMerge) LoadSpeciesMap() {
 	inputMap := cmd.ReadSpeciesFile()
 
 	// Load species map.
-	cmd.speciesMap = make(map[string][]meta.Strain)
+	cmd.speciesMap = make(map[string][]strain.Strain)
 	for prefix, strainPaths := range inputMap {
 		for _, strainPath := range strainPaths {
 			strain, found := strainMap[strainPath]

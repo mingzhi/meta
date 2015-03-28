@@ -1,22 +1,22 @@
-package meta
+package multi
 
 import (
 	"bytes"
 	"github.com/mingzhi/biogo/seq"
-	"github.com/mingzhi/ncbiutils"
+	"github.com/mingzhi/ncbiftp/seqrecord"
 	"io"
 	"os/exec"
 	"strings"
 )
 
-type MultiAlignFunc func(stdin io.Reader, stdout, stderr io.Writer, options ...string) error
+type AlignFunc func(stdin io.Reader, stdout, stderr io.Writer, options ...string) error
 
 // Multiple sequence alignment of protein sequences
 // and back translate them to nucleotide sequences
-func MultiAlign(seqRecords []ncbiutils.SeqRecord, alignFunc MultiAlignFunc, options ...string) []ncbiutils.SeqRecord {
+func Align(seqRecords []seqrecord.SeqRecord, alignFunc AlignFunc, options ...string) []seqrecord.SeqRecord {
 	// prepare protein sequences in fasta format
 	stdin := new(bytes.Buffer)
-	srMap := make(map[string]ncbiutils.SeqRecord)
+	srMap := make(map[string]seqrecord.SeqRecord)
 	for _, sr := range seqRecords {
 		stdin.WriteString(">" + sr.Id + "|" + sr.Genome + "\n")
 		stdin.Write(sr.Prot)
@@ -32,12 +32,12 @@ func MultiAlign(seqRecords []ncbiutils.SeqRecord, alignFunc MultiAlignFunc, opti
 		panic(string(stderr.Bytes()))
 	}
 
-	alnSeqRecords := []ncbiutils.SeqRecord{}
+	alnSeqRecords := []seqrecord.SeqRecord{}
 	for _, aaSeq := range alns {
 		if aaSeq != nil {
 			if _, found := srMap[aaSeq.Id]; found {
 				na := BackTranslate(aaSeq.Seq, srMap[aaSeq.Id].Nucl)
-				sr := ncbiutils.SeqRecord{
+				sr := seqrecord.SeqRecord{
 					Id:     strings.Split(aaSeq.Id, "|")[0],
 					Prot:   aaSeq.Seq,
 					Nucl:   na,

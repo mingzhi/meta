@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/mingzhi/meta"
+	"github.com/mingzhi/meta/strain"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -26,7 +26,7 @@ func (cmd *cmdAlignReads) Run(args []string) {
 	MakeDir(filepath.Join(*cmd.workspace, cmd.samOutBase))
 
 	// Map reads to each strain.
-	jobs := make(chan meta.Strain)
+	jobs := make(chan strain.Strain)
 	go func() {
 		defer close(jobs)
 		for _, strains := range cmd.speciesMap {
@@ -80,7 +80,7 @@ func (cmd *cmdAlignReads) Run(args []string) {
 //  --gbar <int> : Disallow gaps within <int> positions of the beginning or end of the read.
 //                 Default: 4. We set as 1000 for not allowing gaps.
 //
-func (cmd *cmdAlignReads) align(strain meta.Strain) {
+func (cmd *cmdAlignReads) align(strain strain.Strain) {
 	// Basic control options.
 	options := []string{
 		"-t",
@@ -97,10 +97,9 @@ func (cmd *cmdAlignReads) align(strain meta.Strain) {
 	MakeDir(outPath)
 
 	for _, g := range strain.Genomes {
-		acc := meta.FindRefAcc(g.Accession)
 		// reference genome and reads setting.
-		genomeIndexBase := filepath.Join(cmd.refBase, strain.Path, acc)
-		outFilePrefix := filepath.Join(outPath, acc)
+		genomeIndexBase := filepath.Join(cmd.refBase, strain.Path, g.RefAcc())
+		outFilePrefix := filepath.Join(outPath, g.RefAcc())
 		samOutFilePath := outFilePrefix + bowtiedSamAppendix
 		options = append(options, []string{"-x", genomeIndexBase}...)
 		options = append(options, []string{"-1", cmd.pairedEndReadFile1}...)

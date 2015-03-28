@@ -1,4 +1,4 @@
-package meta
+package ortho
 
 // Perform ortholog clustering using reciprocal best hit and MCL.
 
@@ -6,7 +6,7 @@ import (
 	"bufio"
 	"bytes"
 	"fmt"
-	"github.com/mingzhi/hgt/taxa"
+	"github.com/mingzhi/meta/strain"
 	"io"
 	"io/ioutil"
 	"log"
@@ -21,24 +21,24 @@ import (
 // First, it uses usearch to find the best reciprocal top hits
 // for each pair of genomes.
 // Then it uses MCL to obtain ortholog clusters.
+//
 // strains: a array of strains.
 // dir: reference genome folder, containing their genome sequences.
-func OrthoMCl(strains []Strain, dir string) (clusters [][]string) {
+func OrthoMCl(strains []strain.Strain, dir string) (clusters [][]string) {
 	// Check and prepare blast database.
 	// Remove those strains that do not have protein sequences.
-	selectStrains := []Strain{}
+	selectStrains := []strain.Strain{}
 	for _, s := range strains {
 		for _, g := range s.Genomes {
-			acc := cleanAccession(g.Accession)
-			f := filepath.Join(dir, s.Path, acc+".faa")
+			f := filepath.Join(dir, s.Path, g.RefAcc()+".faa")
 			if _, err := os.Stat(f); err == nil {
 				// index the sequence if have not.
 				if !IsUsearchDBExist(f) {
 					UsearchMakeUDB(f)
 				}
 				selectStrains = append(selectStrains, s)
-			} else if os.IsNotExist(err) {
-				Warn.Printf("%s is not exist!\n", f)
+			} else {
+				panic(err)
 			}
 		}
 	}
@@ -48,13 +48,6 @@ func OrthoMCl(strains []Strain, dir string) (clusters [][]string) {
 
 	// Get ortholog clusters using MCL
 	clusters = MCL(pairs)
-
-	Info.Printf("Total clusters: %d\n", len(clusters))
-	n := 0.0
-	for _, cls := range clusters {
-		n += float64(len(cls))
-	}
-	Info.Printf("Average cluster size: %.1f\n", n/float64(len(clusters)))
 
 	return
 }
@@ -66,16 +59,16 @@ type Pair struct {
 
 // AllAgainstAll perform all against all usearch
 // for the reciprocal top hits for each pair of genomes.
-func AllAgainstAll(strains []Strain, dir string) []Pair {
+func AllAgainstAll(strains []strain.Strain, dir string) []Pair {
 	ncpu := runtime.GOMAXPROCS(0)
 	// Prepare jobs.
-	jobs := make(chan []Strain, ncpu)
+	jobs := make(chan []strain.Strain, ncpu)
 	go func() {
 		for i := 0; i < len(strains); i++ {
 			a := strains[i]
 			for j := i + 1; j < len(strains); j++ {
 				b := strains[j]
-				pair := []Strain{a, b}
+				pair := []strain.Strain{a, b}
 				jobs <- pair
 
 			}
@@ -83,29 +76,27 @@ func AllAgainstAll(strains []Strain, dir string) []Pair {
 		close(jobs)
 	}()
 
-	done := make(chan bool)      // signal channel.
-	results := make(chan []Pair) // result channel.
+	done := make(chan bool)    // signal channel.
+	results := make(chan Pair) // result channel.
 	for i := 0; i < ncpu; i++ {
 		go func() {
 			for pair := range jobs {
 				a := pair[0]
 				b := pair[1]
 				for _, genomeA := range a.Genomes {
-					accA := cleanAccession(genomeA.Accession)
+					accA := genomeA.RefAcc()
 					for _, genomeB := range b.Genomes {
-						accB := cleanAccession(genomeB.Accession)
+						accB := genomeB.RefAcc()
 						fileNameA := filepath.Join(dir, a.Path, accA+".faa")
 						fileNameB := filepath.Join(dir, b.Path, accB+".faa")
 						pairs := ReciprocalBestHits(fileNameA, fileNameB)
-						newPairs := []Pair{}
 						for _, p := range pairs {
 							newP := Pair{
 								A: p.A + "|" + accA,
 								B: p.B + "|" + accB,
 							}
-							newPairs = append(newPairs, newP)
+							results <- newP
 						}
-						results <- newPairs
 					}
 				}
 			}
@@ -121,14 +112,11 @@ func AllAgainstAll(strains []Strain, dir string) []Pair {
 	}()
 
 	allPairs := []Pair{}
-	n := 0
-	for pairs := range results {
-		allPairs = append(allPairs, pairs...)
-		n++
+
+	for pair := range results {
+		allPairs = append(allPairs, pair)
 	}
-	Info.Printf("Total orthologous pairs: %d\n", len(allPairs))
-	Info.Printf("Total pairs of genomes: %d, average %.1f pairs of orthologs\n",
-		n, float64(len(allPairs))/float64(n))
+
 	return allPairs
 }
 
@@ -209,12 +197,4 @@ func readMCL(filename string) (clusters [][]string) {
 	}
 
 	return
-}
-
-func LoadSeqRecords(strains []Strain, dir string, gcMap map[string]*taxa.GeneticCode) {
-
-}
-
-func cleanAccession(name string) string {
-	return strings.Split(name, ".")[0]
 }

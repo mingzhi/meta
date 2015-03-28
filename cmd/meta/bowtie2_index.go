@@ -2,7 +2,7 @@ package main
 
 import (
 	"bytes"
-	"github.com/mingzhi/meta"
+	"github.com/mingzhi/meta/strain"
 	"os/exec"
 	"path/filepath"
 )
@@ -18,7 +18,7 @@ func (cmd *cmdIndex) Run(args []string) {
 	cmd.ParseConfig()
 	cmd.LoadSpeciesMap()
 
-	jobs := make(chan meta.Strain)
+	jobs := make(chan strain.Strain)
 	go func() {
 		for _, strains := range cmd.speciesMap {
 			for _, strain := range strains {
@@ -46,11 +46,10 @@ func (cmd *cmdIndex) Run(args []string) {
 }
 
 // Build bowtie2 index.
-func bowtieBuildIndex(strain meta.Strain, refDir string) {
+func bowtieBuildIndex(strain strain.Strain, refDir string) {
 	for _, g := range strain.Genomes {
-		acc := meta.FindRefAcc(g.Accession)
-		genomeFastaPath := filepath.Join(refDir, strain.Path, acc+".fna")
-		genomeIndexBase := filepath.Join(refDir, strain.Path, acc)
+		genomeFastaPath := filepath.Join(refDir, strain.Path, g.RefAcc()+".fna")
+		genomeIndexBase := filepath.Join(refDir, strain.Path, g.RefAcc())
 		cmd := exec.Command("bowtie2-build", "-f", genomeFastaPath, genomeIndexBase)
 		// capture stderr.
 		stderr := new(bytes.Buffer)

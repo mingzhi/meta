@@ -2,7 +2,9 @@ package main
 
 import (
 	"fmt"
-	"github.com/mingzhi/meta"
+	"github.com/mingzhi/meta/cov"
+	"github.com/mingzhi/meta/genome"
+	"github.com/mingzhi/meta/reads"
 	"math"
 	"os"
 	"path/filepath"
@@ -10,14 +12,20 @@ import (
 	"strings"
 )
 
-type covReadsFunc func(records meta.PairedEndReads,
-	genome meta.Genome, maxl, pos int) (kc *meta.KsCalculator, cc *meta.CovCalculator)
+type covReadsFunc func(records reads.PairedEndReads,
+	g genome.Genome, maxl, pos int) (kc *cov.KsCalculator, cc *cov.CovCalculator)
 
 // Command to calculate correlations for mapped reads to reference genomes.
 type cmdCovReads struct {
 	cmdConfig // embedded cmdConfig.
 
 	covFunc covReadsFunc // cov calculate function.
+}
+
+func (cmd *cmdCovReads) Init() {
+	if len(cmd.positions) == 0 {
+		WARN.Println("Use default position: 4!")
+	}
 }
 
 // Run command.
@@ -34,49 +42,44 @@ func (cmd *cmdCovReads) Run(args []string) {
 		for _, s := range strains {
 			// Make specific output folder.
 			MakeDir(filepath.Join(*cmd.workspace, cmd.covOutBase, s.Path))
-			for _, genome := range s.Genomes {
+			for _, g := range s.Genomes {
 				// [TODO] Now we only work on chromosome genomes.
-				if isChromosome(genome.Replicon) {
-					// Clear RefSeq accession (remove .version and such).
-					acc := meta.FindRefAcc(genome.Accession)
+				if isChromosome(g.Replicon) {
 					// Read records of reads from a "sam" file.
-					samFileName := acc + bowtiedSamAppendix
+					samFileName := g.RefAcc() + bowtiedSamAppendix
 					samFilePath := filepath.Join(*cmd.workspace, cmd.samOutBase, s.Path, samFileName)
 					// Check if the "sam" file exists.
 					if isSamFileExist(samFilePath) {
-						_, records := meta.ReadSamFile(samFilePath)
+						_, records := reads.ReadSamFile(samFilePath)
 
 						if len(records) == 0 {
-							WARN.Printf("%s,%s has zero records\n", s.Path, genome.Accession)
+							WARN.Printf("%s,%s has zero records\n", s.Path, g.RefAcc())
 						} else {
 							// Read position profile for the genome.
-							posFileName := meta.FindRefAcc(genome.Accession) + ".pos"
-							posFilePath := filepath.Join(cmd.refBase, s.Path, posFileName)
-							genome.PosProfile = meta.ReadPosProfile(posFilePath)
-							// Read sequence for the genome.
-							fnaFileName := meta.FindRefAcc(genome.Accession) + ".fna"
-							fnaFilePath := filepath.Join(cmd.refBase, s.Path, fnaFileName)
-							genome.Seq = meta.ReadFasta(fnaFilePath).Seq
+							// base folder of the strain.
+							base := filepath.Join(cmd.refBase, s.Path)
+							genome.LoadFna(&g, base)
+							genome.LoadProfile(&g, base)
 
 							// paired end reads and sorted.
-							matedReads := meta.GetPairedEndReads(records)
-							for _, funcName := range cmd.covReadsFunctions {
+							matedReads := reads.GetPairedEndReads(records)
+							for _, funcName := range cmd.covReadsFuncs {
 								// Assign cov read function.
 								switch funcName {
 								case "Cov_Reads_vs_Reads":
-									cmd.covFunc = meta.CovReadsReads
-									sort.Sort(meta.ByRightCoordinatePairedEndReads{matedReads})
+									cmd.covFunc = cov.ReadsVsReads
+									sort.Sort(reads.ByRightCoordinatePairedEndReads{matedReads})
 								case "Cov_Reads_vs_Genome":
-									cmd.covFunc = meta.CovReadsGenome
+									cmd.covFunc = cov.ReadsVsGenome
 								default:
 									continue
 								}
 
 								// Calculate correlations at each position.
 								for _, pos := range cmd.positions {
-									res := cmd.Cov(matedReads, genome, pos)
+									res := cmd.Cov(matedReads, g, pos)
 									// Write result to files.
-									filePrefix := fmt.Sprintf("%s_%s_pos%d", acc,
+									filePrefix := fmt.Sprintf("%s_%s_pos%d", g.RefAcc(),
 										funcName, pos)
 									filePath := filepath.Join(*cmd.workspace, cmd.covOutBase, s.Path,
 										filePrefix+".json")
@@ -102,10 +105,10 @@ func (cmd *cmdCovReads) Run(args []string) {
 }
 
 // Calculate covariance for records.
-func (cmd *cmdCovReads) Cov(records meta.PairedEndReads,
-	genome meta.Genome, pos int) (res CovResult) {
+func (cmd *cmdCovReads) Cov(records reads.PairedEndReads,
+	g genome.Genome, pos int) (res CovResult) {
 
-	kc, cc := cmd.covFunc(records, genome, cmd.maxl, pos)
+	kc, cc := cmd.covFunc(records, g, cmd.maxl, pos)
 
 	// Process and return a cov result.
 	res.Ks = kc.Mean.GetResult()

@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"flag"
 	"github.com/jacobstr/confer"
-	"github.com/mingzhi/meta"
+	"github.com/mingzhi/meta/strain"
 	"gopkg.in/yaml.v2"
 	"io/ioutil"
 	"os"
@@ -26,9 +26,14 @@ type cmdConfig struct {
 	taxBase string // taxonomy database folder.
 	repBase string // genome report database.
 
-	samOutBase string // sam output folder.
+	// Output folders.
+	samOutBase   string // sam output folder.
+	covOutBase   string // cov output folder.
+	orthoOutBase string // orthologs and alignment output folder.
+	plotOutBase  string // plot output folder.
 
 	// For align_reads.
+	// Now we only support paired-end reads.
 	pairedEndReadFile1 string // paired-end read file 1.
 	pairedEndReadFile2 string // paired-end read file 2.
 
@@ -36,28 +41,22 @@ type cmdConfig struct {
 	bowtieOptions []string // bowtie2 options.
 
 	// For cov calculations.
-	positions         []int    // positions in genomic profile to be calculated.
-	maxl              int      // max length of correlations.
-	covReadsFunctions []string // cov calculation function name.
-	covOutBase        string   // cov output folder.
-
-	// For orthoMCL.
-	orthoOutBase string // orthologs and alignment output folder.
+	positions     []int    // positions in genomic profile to be calculated.
+	maxl          int      // max length of correlations.
+	covReadsFuncs []string // cov calculation function name.
 
 	// Species strain information.
-	// prefix: []strain.
-	speciesFile string // species YAML file.
-	speciesMap  map[string][]meta.Strain
+	speciesFile string                     // species YAML file.
+	speciesMap  map[string][]strain.Strain // species: []strain map.
 
 	// Fit parameters.
 	fitStart, fitEnd int
 	fitRSquare       float64
-
-	// Plot parameters
-	plotBase string
 }
 
+// Implement command package interface.
 func (cmd *cmdConfig) Flags(fs *flag.FlagSet) *flag.FlagSet {
+	// define subcommand's flags.
 	cmd.workspace = fs.String("w", "", "workspace.")
 	cmd.config = fs.String("c", "config.yaml", "configure files in YAML format, which are separeted by comma.")
 	cmd.ncpu = fs.Int("ncpu", runtime.NumCPU(), "number of CPUs for using.")
@@ -73,57 +72,49 @@ func (cmd *cmdConfig) ParseConfig() {
 	// Read configure files.
 	configPaths := strings.Split(*cmd.config, ",")
 	if err := config.ReadPaths(configPaths...); err != nil {
-		ERROR.Fatalln(err)
+		ERROR.Panicln(err)
 	}
 	// Automatic binding.
 	config.AutomaticEnv()
-	// Data
+	// Parse data directory and path.
 	cmd.refBase = config.GetString("genome.reference")
 	cmd.taxBase = config.GetString("genome.taxonomy")
 	cmd.repBase = config.GetString("genome.reports")
-	// Reads
+	// Parse file names of paried-end reads.
 	cmd.pairedEndReadFile1 = config.GetString("reads.paired1")
 	cmd.pairedEndReadFile2 = config.GetString("reads.paired2")
-	// Outputs
+	// Parse output folders.
 	cmd.covOutBase = config.GetString("out.cov")
 	cmd.samOutBase = config.GetString("out.sam")
 	cmd.orthoOutBase = config.GetString("out.ortho")
-	// Correlation settings
+	cmd.plotOutBase = config.GetString("out.plot")
+	// Parse options for covariance calculation.
 	cmd.maxl = config.GetInt("cov.maxl")
-	cmd.covReadsFunctions = config.GetStringSlice("cov.functions")
-	// Bowtie2 settings
+	cmd.covReadsFuncs = config.GetStringSlice("cov.functions")
+	// Parse positions to be calculated.
+	positions := config.GetStringSlice("cov.positions")
+	for _, p := range positions {
+		pos, err := strconv.Atoi(p)
+		if err != nil {
+			ERROR.Panicf("Can not convert %s to integer!", p)
+		}
+		cmd.positions = append(cmd.positions, pos)
+	}
+	// Parse bowtie2 options.
 	cmd.bowtieOptions = config.GetStringSlice("bowtie2.options")
-	// Bacterial species informations
+	// Parse the name of file storing bacterial strain information.
 	cmd.speciesFile = config.GetString("species.file")
-	// cmd.LoadSpeciesMap()
 
 	// Fit range.
 	cmd.fitStart = config.GetInt("fit.start")
 	cmd.fitEnd = config.GetInt("fit.end")
 	cmd.fitRSquare = config.GetFloat64("fit.rsquare")
 
-	// Plot parameters.
-	cmd.plotBase = config.GetString("plot.dir")
-
-	positions := config.GetStringSlice("cov.positions")
-	for _, p := range positions {
-		pos, err := strconv.Atoi(p)
-		if err != nil {
-			ERROR.Fatalf("Can not convert %s to integer!", p)
-		}
-		cmd.positions = append(cmd.positions, pos)
-	}
-
-	if len(cmd.positions) == 0 {
-		WARN.Println("Use default position: 4!")
-	}
-
 	runtime.GOMAXPROCS(*cmd.ncpu)
-
 }
 
 // Read reference_strains.json.
-func (cmd *cmdConfig) ReadReferenceStrains() (strains []meta.Strain) {
+func (cmd *cmdConfig) ReadReferenceStrains() (strains []strain.Strain) {
 	f, err := os.Open(filepath.Join(*cmd.workspace, "reference_strains.json"))
 	if err != nil {
 		ERROR.Fatalln(err)
@@ -137,52 +128,35 @@ func (cmd *cmdConfig) ReadReferenceStrains() (strains []meta.Strain) {
 	return
 }
 
-// Create reference_strains.json
-func (cmd *cmdConfig) CreateReferenceStrains() (strains []meta.Strain) {
-	strains = meta.GenerateStrainInfors(*cmd.workspace, cmd.refBase, cmd.taxBase)
-	w, err := os.Create(filepath.Join(*cmd.workspace, "reference_strains.json"))
-	if err != nil {
-		ERROR.Fatalln(err)
-	}
-	defer w.Close()
-	encoder := json.NewEncoder(w)
-	err = encoder.Encode(strains)
-	if err != nil {
-		ERROR.Fatalln(err)
-	}
-	return
-}
-
-// Read species file,
+// Read species file in yaml file format.
 // return a map[string][]string,
 // in which prefix: []strain.path
 func (cmd *cmdConfig) ReadSpeciesFile() map[string][]string {
 	filePath := filepath.Join(*cmd.workspace, cmd.speciesFile)
 	f, err := os.Open(filePath)
 	if err != nil {
-		ERROR.Fatalf("Cannot open %s: %v\n", filePath, err)
+		ERROR.Panicln("Cannot open %s: %v\n", filePath, err)
 	}
 	defer f.Close()
 
 	data, err := ioutil.ReadAll(f)
 	if err != nil {
-		ERROR.Fatalf("Cannot read file %s: %v\n", filePath, err)
+		ERROR.Panicln("Cannot read file %s: %v\n", filePath, err)
 	}
 
 	m := make(map[string][]string)
 	err = yaml.Unmarshal(data, &m)
 	if err != nil {
-		ERROR.Fatalf("Cannot unmarshal %s: %v\n", filePath, err)
+		ERROR.Panicln("Cannot unmarshal %s: %v\n", filePath, err)
 	}
 
 	return m
 }
 
-// Load species map.
+// Load species strains map.
 func (cmd *cmdConfig) LoadSpeciesMap() {
-	// If reference_strains exists, read it,
-	// else generate it.
-	var strains []meta.Strain
+	// If reference_strains exists, read it.
+	var strains []strain.Strain
 	if isReferenceStrainsExists(*cmd.workspace, cmd.repBase) {
 		strains = cmd.ReadReferenceStrains()
 	} else {
@@ -191,7 +165,7 @@ func (cmd *cmdConfig) LoadSpeciesMap() {
 
 	// Make a strain map,
 	// strain.path: strain
-	strainMap := make(map[string]meta.Strain)
+	strainMap := make(map[string]strain.Strain)
 	for _, strain := range strains {
 		strainMap[strain.Path] = strain
 	}
@@ -200,14 +174,13 @@ func (cmd *cmdConfig) LoadSpeciesMap() {
 	inputMap := cmd.ReadSpeciesFile()
 
 	// Load species map.
-	cmd.speciesMap = make(map[string][]meta.Strain)
+	cmd.speciesMap = make(map[string][]strain.Strain)
 	for prefix, strainPaths := range inputMap {
 		for _, strainPath := range strainPaths {
 			strain, found := strainMap[strainPath]
 			if found {
 				if cmd.checkStrain(strain) {
 					cmd.speciesMap[prefix] = append(cmd.speciesMap[prefix], strain)
-					INFO.Println(strain.Path)
 				}
 			} else {
 				WARN.Printf("Cannot find %s\n", strainPath)
@@ -216,9 +189,11 @@ func (cmd *cmdConfig) LoadSpeciesMap() {
 	}
 }
 
-func (cmd *cmdConfig) checkStrain(s meta.Strain) bool {
+// check if the strain has complete genome sequences.
+func (cmd *cmdConfig) checkStrain(s strain.Strain) bool {
+	// for each genome, check if its .fna file exists.
 	for _, g := range s.Genomes {
-		fileName := meta.FindRefAcc(g.Accession) + ".fna"
+		fileName := g.RefAcc() + ".fna"
 		filePath := filepath.Join(cmd.refBase, s.Path, fileName)
 		if _, err := os.Stat(filePath); err != nil {
 			WARN.Println(err)

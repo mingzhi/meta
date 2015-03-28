@@ -2,8 +2,8 @@ package main
 
 import (
 	"encoding/json"
-	"github.com/mingzhi/meta"
-	"github.com/mingzhi/ncbiutils"
+	"github.com/mingzhi/meta/align/multi"
+	"github.com/mingzhi/ncbiftp/seqrecord"
 	"os"
 	"path/filepath"
 )
@@ -26,7 +26,7 @@ func (cmd *cmdOrthoAln) Run(args []string) {
 
 		if len(groups) > 0 {
 			// Create a job for each sequence records.
-			jobs := make(chan ncbiutils.SeqRecords)
+			jobs := make(chan seqrecord.SeqRecords)
 			go func() {
 				defer close(jobs)
 				for _, cluster := range groups {
@@ -40,11 +40,11 @@ func (cmd *cmdOrthoAln) Run(args []string) {
 			// done is signal channel.
 			done := make(chan bool)
 			// results is a channel for aligned sequence records.
-			results := make(chan ncbiutils.SeqRecords)
+			results := make(chan seqrecord.SeqRecords)
 			for i := 0; i < *cmd.ncpu; i++ {
 				go func() {
 					for cluster := range jobs {
-						aln := meta.MultiAlign(cluster, meta.Muscle)
+						aln := multi.Align(cluster, multi.Muscle)
 						results <- aln
 					}
 					done <- true
@@ -60,7 +60,7 @@ func (cmd *cmdOrthoAln) Run(args []string) {
 			}()
 
 			// Collected aligned sequence records.
-			alns := []ncbiutils.SeqRecords{}
+			alns := []seqrecord.SeqRecords{}
 			for aln := range results {
 				alns = append(alns, aln)
 			}
@@ -75,7 +75,7 @@ func (cmd *cmdOrthoAln) Run(args []string) {
 
 }
 
-func (cmd *cmdOrthoAln) ReadOrhtologs(prefix string) (groups []ncbiutils.SeqRecords) {
+func (cmd *cmdOrthoAln) ReadOrhtologs(prefix string) (groups []seqrecord.SeqRecords) {
 	fileName := prefix + "_orthologs.json"
 	filePath := filepath.Join(*cmd.workspace, cmd.orthoOutBase,
 		fileName)
@@ -95,7 +95,7 @@ func (cmd *cmdOrthoAln) ReadOrhtologs(prefix string) (groups []ncbiutils.SeqReco
 	return
 }
 
-func (cmd *cmdOrthoAln) SaveAlignments(prefix string, alns []ncbiutils.SeqRecords) {
+func (cmd *cmdOrthoAln) SaveAlignments(prefix string, alns []seqrecord.SeqRecords) {
 	fileName := prefix + "_orthologs_aligned.json"
 	filePath := filepath.Join(*cmd.workspace, cmd.orthoOutBase,
 		fileName)
