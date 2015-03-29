@@ -66,9 +66,14 @@ func GenomesVsGenomes(alignments []seqrecord.SeqRecords, g genome.Genome, maxl, 
 						prof = g.PosProfile[start:end]
 					} else {
 						if len(g.PosProfile)-start+end > len(nucl) {
+							// [TODO]
 							continue
 						} else {
 							end = len(nucl) + start - len(g.PosProfile)
+							// [TODO]
+							if end <= 0 {
+								continue
+							}
 						}
 						prof = g.PosProfile[start:]
 						prof = append(prof, g.PosProfile[:end]...)
