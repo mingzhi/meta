@@ -105,7 +105,12 @@ func (cmd *cmdCovGenomes) RunOne(strains []strain.Strain, alignments []seqrecord
 						funcType, pos)
 					filePath := filepath.Join(*cmd.workspace, cmd.covOutBase, s.Path,
 						filePrefix+".json")
-					save2Json(res, filePath)
+					if !math.IsNaN(res.VarKs) {
+						res.NReads = len(matedReads)
+						save2Json(res, filePath)
+					} else {
+						WARN.Printf("%s: VarKs: NaN\n", filePath)
+					}
 				}
 
 			}
