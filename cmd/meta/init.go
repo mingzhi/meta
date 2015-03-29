@@ -46,7 +46,7 @@ func (cmd *cmdInit) Run(args []string) {
 	// or the one is older than summary.txt,
 	// create a new one.
 	var strains []strain.Strain
-	strains = getStrainInfors(cmd.refBase, cmd.repBase, cmd.taxBase)
+	strains = getStrainInfors(cmd.refBase, cmd.repBase, cmd.taxBase, *cmd.complete)
 	w, err := os.Create(filepath.Join(*cmd.workspace, "reference_strains.json"))
 	if err != nil {
 		ERROR.Fatalln(err)
@@ -125,7 +125,7 @@ func isReferenceStrainsExists(workspace, repBase string) (isExist bool) {
 
 // get strain informations
 // from GENOME_REPORTS
-func getStrainInfors(refBase, repBase, taxBase string) (strains []strain.Strain) {
+func getStrainInfors(refBase, repBase, taxBase string, completed bool) (strains []strain.Strain) {
 	// Read prokaryotes strains.
 	fileName := "prokaryotes.txt"
 	filePath := filepath.Join(repBase, fileName)
@@ -179,13 +179,15 @@ func getStrainInfors(refBase, repBase, taxBase string) (strains []strain.Strain)
 						s1.Genomes = append(s1.Genomes, g2)
 					}
 				} else {
-					path := filepath.Join(refBase, s.Path)
-					genomes := listScaffoldFiles(path)
-					for _, g := range genomes {
-						g2 := genome.Genome{}
-						g2.Accession = g
-						g2.Replicon = "chromosome"
-						s1.Genomes = append(s1.Genomes, g2)
+					if !completed {
+						path := filepath.Join(refBase, s.Path)
+						genomes := listScaffoldFiles(path)
+						for _, g := range genomes {
+							g2 := genome.Genome{}
+							g2.Accession = g
+							g2.Replicon = "chromosome"
+							s1.Genomes = append(s1.Genomes, g2)
+						}
 					}
 				}
 
@@ -204,7 +206,7 @@ func getStrainInfors(refBase, repBase, taxBase string) (strains []strain.Strain)
 	}()
 
 	for s := range results {
-		if len(s.Genomes) > 0 {
+		if len(s.Genomes) > 0 && s.Species != "" {
 			strains = append(strains, s)
 		}
 	}
