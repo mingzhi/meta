@@ -52,6 +52,9 @@ type cmdConfig struct {
 	// Fit parameters.
 	fitStart, fitEnd int
 	fitRSquare       float64
+
+	// bootstrapping parameters.
+	numBoot int // number of bootstrapping
 }
 
 // Implement command package interface.
@@ -109,6 +112,9 @@ func (cmd *cmdConfig) ParseConfig() {
 	cmd.fitStart = config.GetInt("fit.start")
 	cmd.fitEnd = config.GetInt("fit.end")
 	cmd.fitRSquare = config.GetFloat64("fit.rsquare")
+
+	// Bootstrapping
+	cmd.numBoot = config.GetInt("bootstrapping.number")
 
 	runtime.GOMAXPROCS(*cmd.ncpu)
 }

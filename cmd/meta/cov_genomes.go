@@ -87,9 +87,9 @@ func (cmd *cmdCovGenomes) RunOne(strains []strain.Strain, alignments []seqrecord
 				genome.LoadFna(&g, base)
 				genome.LoadProfile(&g, base)
 
-				covGenomesFuncs := []cov.GenomesFunc{
-					cov.GenomesVsGenome,
-					cov.GenomesVsGenomes,
+				covGenomesFuncs := []cov.GenomesOneFunc{
+					cov.GenomesVsGenomeOne,
+					cov.GenomesVsGenomesOne,
 				}
 
 				covGenomesFuncNames := []string{
@@ -109,6 +109,22 @@ func (cmd *cmdCovGenomes) RunOne(strains []strain.Strain, alignments []seqrecord
 						save2Json(res, filePath)
 					} else {
 						WARN.Printf("%s: VarKs: NaN\n", filePath)
+					}
+
+					if cmd.numBoot > 0 {
+						results := cmd.covBoot(alignments, g, pos, covGenomesFunc)
+						// Write result to files.
+						filePrefix := fmt.Sprintf("%s_%s_pos%d", g.RefAcc(),
+							funcType, pos)
+						filePath := filepath.Join(*cmd.workspace, cmd.covOutBase, s.Path,
+							filePrefix+"_boot.json")
+						selected := []CovResult{}
+						for _, res := range results {
+							if !math.IsNaN(res.VarKs) {
+								selected = append(selected, res)
+							}
+						}
+						save2Jsons(selected, filePath)
 					}
 				}
 
@@ -145,10 +161,25 @@ func (cmd *cmdCovGenomes) ReadAlignments(prefix string) (alns []seqrecord.SeqRec
 }
 
 // Calculate covariances for records.
-func (cmd *cmdCovGenomes) Cov(records []seqrecord.SeqRecords,
-	g genome.Genome, pos int, covGenomesFunc cov.GenomesFunc) (res CovResult) {
-	kc, cc := covGenomesFunc(records, g, cmd.maxl, pos)
+func (cmd *cmdCovGenomes) Cov(records []seqrecord.SeqRecords, g genome.Genome, pos int, covFunc cov.GenomesOneFunc) (res CovResult) {
+	kc, cc := cov.GenomesCalc(records, g, cmd.maxl, pos, covFunc)
+	maxl := cmd.maxl
+	res = createCovResult(kc, cc, maxl, pos)
+	return
+}
 
+func (cmd *cmdCovGenomes) covBoot(records []seqrecord.SeqRecords, g genome.Genome, pos int, covFunc cov.GenomesOneFunc) (results []CovResult) {
+	kcs, ccs := cov.GenomesBoot(records, g, cmd.maxl, pos, cmd.numBoot, covFunc)
+	maxl := cmd.maxl
+	for i := 0; i < len(kcs); i++ {
+		kc, cc := kcs[i], ccs[i]
+		res := createCovResult(kc, cc, maxl, pos)
+		results = append(results, res)
+	}
+	return
+}
+
+func createCovResult(kc *cov.KsCalculator, cc *cov.CovCalculator, maxl, pos int) (res CovResult) {
 	// Process and return a cov result.
 	res.Ks = kc.Mean.GetResult()
 	res.VarKs = kc.Var.GetResult()
@@ -158,10 +189,10 @@ func (cmd *cmdCovGenomes) Cov(records []seqrecord.SeqRecords,
 	var step, size int
 	if pos == 0 {
 		step = 1
-		size = cmd.maxl
+		size = maxl
 	} else {
 		step = 3
-		size = cmd.maxl / 3
+		size = maxl / 3
 	}
 
 	for i := 0; i < size; i++ {
@@ -174,6 +205,5 @@ func (cmd *cmdCovGenomes) Cov(records []seqrecord.SeqRecords,
 			res.CtN = append(res.CtN, n)
 		}
 	}
-
 	return
 }

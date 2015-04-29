@@ -38,6 +38,23 @@ func save2Json(cr CovResult, fileName string) {
 	}
 }
 
+// Save cov result to a json file.
+func save2Jsons(cr []CovResult, fileName string) {
+	f, err := os.Create(fileName)
+	if err != nil {
+		ERROR.Panicln(err)
+	}
+	defer f.Close()
+
+	ec := json.NewEncoder(f)
+	if err := ec.Encode(cr); err != nil {
+		ERROR.Println(cr)
+		ERROR.Printf("Ks: %f\n", cr[0].Ks)
+		ERROR.Printf("VarKs: %f\n", cr[0].VarKs)
+		ERROR.Panicln(err)
+	}
+}
+
 // Read cov result.
 func readCovResult(fileName string) (cr CovResult) {
 	r, err := os.Open(fileName)
