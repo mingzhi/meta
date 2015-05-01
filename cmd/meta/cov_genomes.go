@@ -120,7 +120,7 @@ func (cmd *cmdCovGenomes) RunOne(strains []strain.Strain, alignments []seqrecord
 							filePrefix+"_boot.json")
 						selected := []CovResult{}
 						for _, res := range results {
-							if !math.IsNaN(res.VarKs) && len(res.Ct) == cmd.maxl {
+							if !math.IsNaN(res.VarKs) {
 								selected = append(selected, res)
 							}
 						}
