@@ -49,7 +49,7 @@ func (cmd *cmdCovGenomes) Run(args []string) {
 	for prefix, strains := range cmd.speciesMap {
 		// Read alignments.
 		alignments := cmd.ReadAlignments(prefix)
-
+		INFO.Printf("Total number of alignments: %d\n", len(alignments))
 		var alns []seqrecord.SeqRecords
 		if cmd.core {
 			for _, aln := range alignments {
@@ -61,6 +61,7 @@ func (cmd *cmdCovGenomes) Run(args []string) {
 					alns = append(alns, aln)
 				}
 			}
+			INFO.Printf("Using core alignments: %d in total\n", len(alns))
 		} else {
 			alns = alignments
 		}
