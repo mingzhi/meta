@@ -49,38 +49,44 @@ func (cmd *cmdCovGenomes) Run(args []string) {
 	for prefix, strains := range cmd.speciesMap {
 		// Read alignments.
 		alignments := cmd.ReadAlignments(prefix)
-		INFO.Printf("Total number of alignments: %d\n", len(alignments))
-		var alns []seqrecord.SeqRecords
-		if cmd.core {
-			for _, aln := range alignments {
-				m := make(map[string]bool)
-				for _, rec := range aln {
-					m[rec.Genome] = true
-				}
-				if len(m) == len(strains) {
-					alns = append(alns, aln)
-				}
+		INFO.Printf("Total number of alignments (pan-genome): %d\n", len(alignments))
+		var coreAlignments []seqrecord.SeqRecords // core genome
+		var dispAlignments []seqrecord.SeqRecords // dispensable genome
+		for _, aln := range alignments {
+			genomeSet := make(map[string]bool)
+			for _, rec := range aln {
+				genomeSet[rec.Genome] = true
 			}
-			INFO.Printf("Using core alignments: %d in total\n", len(alns))
-		} else {
-			alns = alignments
+
+			if len(genomeSet) == len(strains) {
+				coreAlignments = append(coreAlignments, aln)
+			} else if len(genomeSet) < len(strains) {
+				dispAlignments = append(dispAlignments, aln)
+			}
 		}
 
-		// If zero alignments, skip it.
-		if len(alns) == 0 {
-			WARN.Printf("%s has zero alignments.\n", prefix)
-			continue
+		INFO.Printf("Core alignments %d, Dispensable alignments %d\n", len(coreAlignments), len(dispAlignments))
+
+		alignmentTypes := []string{"core", "disp"}
+		alignmentArray := [][]seqrecord.SeqRecords{coreAlignments, dispAlignments}
+		for i := 0; i < len(alignmentTypes); i++ {
+			name := alignmentTypes[i]
+			alns := alignmentArray[i]
+			if len(alns) == 0 {
+				WARN.Printf("%s, %s alignments has zero record.\n", prefix, name)
+			}
+
+			// For each position, do the calculation.
+			for _, pos := range cmd.positions {
+				cmd.RunOne(strains, alns, pos, name)
+			}
 		}
 
-		// For each position, do the calculation.
-		for _, pos := range cmd.positions {
-			cmd.RunOne(strains, alns, pos)
-		}
 	}
 
 }
 
-func (cmd *cmdCovGenomes) RunOne(strains []strain.Strain, alignments []seqrecord.SeqRecords, pos int) {
+func (cmd *cmdCovGenomes) RunOne(strains []strain.Strain, alignments []seqrecord.SeqRecords, pos int, name string) {
 	// For each strain (genome), create a job.
 	type job struct {
 		strain strain.Strain
@@ -125,8 +131,8 @@ func (cmd *cmdCovGenomes) RunOne(strains []strain.Strain, alignments []seqrecord
 					funcType := covGenomesFuncNames[j]
 					res := cmd.Cov(alignments, g, pos, covGenomesFunc)
 					// Write result to files.
-					filePrefix := fmt.Sprintf("%s_%s_pos%d", g.RefAcc(),
-						funcType, pos)
+					filePrefix := fmt.Sprintf("%s_%s_%s_pos%d", g.RefAcc(),
+						funcType, name, pos)
 					filePath := filepath.Join(*cmd.workspace, cmd.covOutBase, s.Path,
 						filePrefix+".json")
 					if !math.IsNaN(res.VarKs) {
@@ -138,8 +144,6 @@ func (cmd *cmdCovGenomes) RunOne(strains []strain.Strain, alignments []seqrecord
 					if cmd.numBoot > 0 {
 						results := cmd.covBoot(alignments, g, pos, covGenomesFunc)
 						// Write result to files.
-						filePrefix := fmt.Sprintf("%s_%s_pos%d", g.RefAcc(),
-							funcType, pos)
 						filePath := filepath.Join(*cmd.workspace, cmd.covOutBase, s.Path,
 							filePrefix+"_boot.json")
 						selected := []CovResult{}
