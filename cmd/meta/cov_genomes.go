@@ -67,8 +67,8 @@ func (cmd *cmdCovGenomes) Run(args []string) {
 
 		INFO.Printf("Core alignments %d, Dispensable alignments %d\n", len(coreAlignments), len(dispAlignments))
 
-		alignmentTypes := []string{"core", "disp"}
-		alignmentArray := [][]seqrecord.SeqRecords{coreAlignments, dispAlignments}
+		alignmentTypes := []string{"core", "disp", "pan"}
+		alignmentArray := [][]seqrecord.SeqRecords{coreAlignments, dispAlignments, alignments}
 		for i := 0; i < len(alignmentTypes); i++ {
 			name := alignmentTypes[i]
 			alns := alignmentArray[i]
