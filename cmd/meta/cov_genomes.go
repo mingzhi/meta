@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"flag"
 	"fmt"
 	"github.com/mingzhi/meta/cov"
 	"github.com/mingzhi/meta/genome"
@@ -15,7 +16,14 @@ import (
 // Command to calculate correlations of substituions
 // in reference genomes.
 type cmdCovGenomes struct {
-	cmdConfig // embed cmdConfig
+	core      bool // whether to use core genomes.
+	cmdConfig      // embed cmdConfig
+}
+
+func (cmd *cmdCovGenomes) Flags(fs *flag.FlagSet) *flag.FlagSet {
+	fs = cmd.cmdConfig.Flags(fs)
+	fs.BoolVar(&cmd.core, "core", false, "whether to use core genomes")
+	return fs
 }
 
 func (cmd *cmdCovGenomes) Init() {
@@ -42,15 +50,30 @@ func (cmd *cmdCovGenomes) Run(args []string) {
 		// Read alignments.
 		alignments := cmd.ReadAlignments(prefix)
 
+		var alns []seqrecord.SeqRecords
+		if cmd.core {
+			for _, aln := range alignments {
+				m := make(map[string]bool)
+				for _, rec := range aln {
+					m[rec.Genome] = true
+				}
+				if len(m) == len(strains) {
+					alns = append(alns, aln)
+				}
+			}
+		} else {
+			alns = alignments
+		}
+
 		// If zero alignments, skip it.
-		if len(alignments) == 0 {
+		if len(alns) == 0 {
 			WARN.Printf("%s has zero alignments.\n", prefix)
 			continue
 		}
 
 		// For each position, do the calculation.
 		for _, pos := range cmd.positions {
-			cmd.RunOne(strains, alignments, pos)
+			cmd.RunOne(strains, alns, pos)
 		}
 	}
 
