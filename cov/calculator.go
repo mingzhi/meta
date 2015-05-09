@@ -26,6 +26,10 @@ func (cc *CovCalculator) GetResult(i int) float64 {
 	return cc.corrs[i].GetResult()
 }
 
+func (cc *CovCalculator) GetMeanXY(i int) float64 {
+	return cc.corrs[i].MeanX() * cc.corrs[i].MeanY()
+}
+
 func (cc *CovCalculator) GetN(i int) int {
 	return cc.corrs[i].GetN()
 }

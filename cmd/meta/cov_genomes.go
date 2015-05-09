@@ -226,10 +226,12 @@ func createCovResult(kc *cov.KsCalculator, cc *cov.CovCalculator, maxl, pos int)
 	for i := 0; i < size; i++ {
 		index := step * i
 		v := cc.GetResult(index)
+		xy := cc.GetMeanXY(index)
 		n := cc.GetN(index)
 		if !math.IsNaN(v) {
 			res.CtIndices = append(res.CtIndices, i)
 			res.Ct = append(res.Ct, v)
+			res.MeanXY = append(res.MeanXY, xy)
 			res.CtN = append(res.CtN, n)
 		}
 	}

@@ -8,6 +8,7 @@ import (
 type CovResult struct {
 	Ks, VarKs float64
 	Ct        []float64
+	MeanXY    []float64
 	CtIndices []int
 	CtN       []int
 	N         int
