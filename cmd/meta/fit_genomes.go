@@ -31,11 +31,28 @@ func (cmd *cmdFitGenomes) Init() {
 
 func (cmd *cmdFitGenomes) Run(args []string) {
 	cmd.Init()
-	jobs := make(chan []strain.Strain)
+	type job struct {
+		strains []strain.Strain
+		pos     int
+		typ     string
+		funcT   string
+	}
+	jobs := make(chan job)
 	go func() {
 		defer close(jobs)
 		for _, strains := range cmd.speciesMap {
-			jobs <- strains
+			for _, pos := range cmd.positions {
+				for _, name := range []string{"core", "disp", "pan"} {
+					for _, funcType := range []string{"Cov_Genomes_vs_Genome", "Cov_Genomes_vs_Genomes"} {
+						j := job{}
+						j.strains = strains
+						j.pos = pos
+						j.typ = name
+						j.funcT = funcType
+						jobs <- j
+					}
+				}
+			}
 		}
 	}()
 
@@ -43,14 +60,12 @@ func (cmd *cmdFitGenomes) Run(args []string) {
 	done := make(chan bool)
 	for i := 0; i < ncpu; i++ {
 		go func() {
-			for strains := range jobs {
-				for _, pos := range cmd.positions {
-					for _, name := range []string{"core", "disp", "pan"} {
-						for _, funcType := range []string{"Cov_Genomes_vs_Genome", "Cov_Genomes_vs_Genomes"} {
-							cmd.RunOne(strains, pos, name, funcType)
-						}
-					}
-				}
+			for j := range jobs {
+				pos := j.pos
+				name := j.typ
+				funcType := j.funcT
+				strains := j.strains
+				cmd.RunOne(strains, pos, name, funcType)
 			}
 			done <- true
 		}()
