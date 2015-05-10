@@ -31,28 +31,66 @@ func (cmd *cmdFitGenomes) Init() {
 
 func (cmd *cmdFitGenomes) Run(args []string) {
 	cmd.Init()
-	for _, strains := range cmd.speciesMap {
-		for _, pos := range cmd.positions {
-			for _, name := range []string{"core", "disp", "pan"} {
-				for _, funcType := range []string{"Cov_Genomes_vs_Genome", "Cov_Genomes_vs_Genomes"} {
-					cmd.RunOne(strains, pos, name, funcType)
+	jobs := make(chan []strain.Strain)
+	go func() {
+		defer close(jobs)
+		for _, strains := range cmd.speciesMap {
+			jobs <- strains
+		}
+	}()
+
+	ncpu := runtime.GOMAXPROCS(0)
+	done := make(chan bool)
+	for i := 0; i < ncpu; i++ {
+		go func() {
+			for strains := range jobs {
+				for _, pos := range cmd.positions {
+					for _, name := range []string{"core", "disp", "pan"} {
+						for _, funcType := range []string{"Cov_Genomes_vs_Genome", "Cov_Genomes_vs_Genomes"} {
+							cmd.RunOne(strains, pos, name, funcType)
+						}
+					}
 				}
 			}
-		}
+			done <- true
+		}()
+	}
+
+	for i := 0; i < ncpu; i++ {
+		<-done
 	}
 }
 
 func (cmd *cmdFitGenomes) RunOne(strains []strain.Strain, pos int, name string, funcType string) {
-	for _, s := range strains {
-		MakeDir(filepath.Join(*cmd.workspace, cmd.fitOutBase, s.Path))
-		for _, g := range s.Genomes {
-			filePrefix := fmt.Sprintf("%s_%s_%s_pos%d", g.RefAcc(), funcType, name, pos)
-			filePath := filepath.Join(*cmd.workspace, cmd.covOutBase, s.Path, filePrefix+"_boot.json")
-			results := fromJson(filePath)
-			fitResults := fitExp(results, cmd.fitStart, cmd.fitEnd)
-			fitFileOutPath := filepath.Join(*cmd.workspace, cmd.fitOutBase, s.Path, filePrefix+"_boot.json")
-			toJson(fitFileOutPath, fitResults)
+	jobs := make(chan strain.Strain)
+	go func() {
+		defer close(jobs)
+		for _, s := range strains {
+			jobs <- s
 		}
+	}()
+
+	ncpu := runtime.GOMAXPROCS(0)
+	done := make(chan bool)
+	for i := 0; i < ncpu; i++ {
+		go func() {
+			for s := range jobs {
+				MakeDir(filepath.Join(*cmd.workspace, cmd.fitOutBase, s.Path))
+				for _, g := range s.Genomes {
+					filePrefix := fmt.Sprintf("%s_%s_%s_pos%d", g.RefAcc(), funcType, name, pos)
+					filePath := filepath.Join(*cmd.workspace, cmd.covOutBase, s.Path, filePrefix+"_boot.json")
+					results := fromJson(filePath)
+					fitResults := fitExp(results, cmd.fitStart, cmd.fitEnd)
+					fitFileOutPath := filepath.Join(*cmd.workspace, cmd.fitOutBase, s.Path, filePrefix+"_boot.json")
+					toJson(fitFileOutPath, fitResults)
+				}
+			}
+			done <- true
+		}()
+	}
+
+	for i := 0; i < ncpu; i++ {
+		<-done
 	}
 }
 
