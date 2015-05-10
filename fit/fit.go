@@ -1,11 +1,9 @@
 package fit
 
-/*
-#include "fit.h"
-*/
+// #cgo LDFLAGS: -lm
+// #include "fit.h"
 import "C"
 import (
-	"fmt"
 	"github.com/mingzhi/gomath/stat/regression"
 
 	"unsafe"
@@ -39,7 +37,6 @@ func FitExp(t, y []float64) []float64 {
 	par := FitHyper(t[:l], y[:l])
 	par[1] = par[1] * 100
 	par = append(par, 100.0)
-	fmt.Println(par)
 	C.fitExp(C.int(n), (*C.double)(unsafe.Pointer(&par[0])), C.int(m), (*C.double)(unsafe.Pointer(&t[0])), (*C.double)(unsafe.Pointer(&y[0])))
 
 	return par

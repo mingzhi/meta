@@ -24,7 +24,7 @@
 # define __END_DECLS /* empty */
 #endif
 
-#include<lmstruct.h>
+//#include<lmstruct.h>
 
 __BEGIN_DECLS
 

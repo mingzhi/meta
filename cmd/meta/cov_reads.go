@@ -60,6 +60,11 @@ func (cmd *cmdCovReads) Run(args []string) {
 							base := filepath.Join(cmd.refBase, s.Path)
 							genome.LoadFna(&g, base)
 							genome.LoadProfile(&g, base)
+							
+							// check position profile and sequence length.
+							if len(g.PosProfile) != len(g.Seq) {
+								ERROR.Fatalf("%s, %s, %d, %d\n", base, g.Accession, len(g.PosProfile), len(g.Seq))
+							}
 
 							// paired end reads and sorted.
 							matedReads := reads.GetPairedEndReads(records)

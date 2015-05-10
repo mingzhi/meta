@@ -18,7 +18,7 @@ double expModel(double t, const double *p) {
 int fitHyper(int n, double *par, int m, double *t, double *y) {
 	lm_control_struct control = lm_control_double;
 	lm_status_struct status;
-	control.verbosity = 7;
+	control.verbosity = 0;
 
 	lmcurve(n, par, m, t, y, hyperModel, &control, &status);
 
@@ -28,7 +28,7 @@ int fitHyper(int n, double *par, int m, double *t, double *y) {
 int fitExp(int n, double *par, int m, double *t, double *y) {
 	lm_control_struct control = lm_control_double;
 	lm_status_struct status;
-	control.verbosity = 7;
+	control.verbosity = 0;
 
 	lmcurve(n, par, m, t, y, expModel, &control, &status);
 

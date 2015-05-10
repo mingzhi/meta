@@ -26,6 +26,7 @@ func (cmd *cmdFitGenomes) Init() {
 		WARN.Println("Use default position: 4!")
 		cmd.positions = append(cmd.positions, 4)
 	}
+	runtime.GOMAXPROCS(runtime.NumCPU())
 }
 
 func (cmd *cmdFitGenomes) Run(args []string) {
@@ -43,6 +44,7 @@ func (cmd *cmdFitGenomes) Run(args []string) {
 
 func (cmd *cmdFitGenomes) RunOne(strains []strain.Strain, pos int, name string, funcType string) {
 	for _, s := range strains {
+		MakeDir(filepath.Join(*cmd.workspace, cmd.fitOutBase, s.Path))
 		for _, g := range s.Genomes {
 			filePrefix := fmt.Sprintf("%s_%s_%s_pos%d", g.RefAcc(), funcType, name, pos)
 			filePath := filepath.Join(*cmd.workspace, cmd.covOutBase, s.Path, filePrefix+"_boot.json")
