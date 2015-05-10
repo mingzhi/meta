@@ -31,6 +31,7 @@ type cmdConfig struct {
 	covOutBase   string // cov output folder.
 	orthoOutBase string // orthologs and alignment output folder.
 	plotOutBase  string // plot output folder.
+	fitOutBase   string // fitting output folder.
 
 	// For align_reads.
 	// Now we only support paired-end reads.
@@ -112,6 +113,7 @@ func (cmd *cmdConfig) ParseConfig() {
 	cmd.fitStart = config.GetInt("fit.start")
 	cmd.fitEnd = config.GetInt("fit.end")
 	cmd.fitRSquare = config.GetFloat64("fit.rsquare")
+	cmd.fitOutBase = config.GetString(("out.fit"))
 
 	// Bootstrapping
 	cmd.numBoot = config.GetInt("bootstrapping.number")

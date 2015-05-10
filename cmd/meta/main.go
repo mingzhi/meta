@@ -30,6 +30,7 @@ func main() {
 	command.On("estimate", "estimate r/m", &cmdEstimate{}, args)
 	command.On("scaffold_merge", "merge scaffolds", &cmdScaffoldMerge{}, args)
 	command.On("genome_profile", "genome position profiling", &cmdGenomeProfile{}, args)
+	command.On("fit_genomes", "fit genome cov results", &cmdFitGenomes{}, args)
 
 	// Parse and run commands.
 	command.ParseAndRun()

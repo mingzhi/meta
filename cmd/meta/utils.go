@@ -18,7 +18,7 @@ type CovResult struct {
 func MakeDir(d string) {
 	err := os.MkdirAll(d, 0777)
 	if err != nil {
-		ERROR.Fatalln(err)
+		ERROR.Panic(err)
 	}
 }
 
