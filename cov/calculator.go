@@ -3,6 +3,7 @@ package cov
 import (
 	"github.com/mingzhi/gomath/stat/correlation"
 	"github.com/mingzhi/gomath/stat/desc"
+	"math"
 )
 
 type CovCalculator struct {
@@ -40,24 +41,76 @@ func (cc *CovCalculator) Append(cc2 *CovCalculator) {
 	}
 }
 
+type MeanVar struct {
+	Mean           *desc.Mean
+	Var            *desc.Variance
+	BiasCorrection bool
+}
+
+func NewMeanVar(biasCorrection bool) *MeanVar {
+	mv := MeanVar{}
+	mv.Mean = desc.NewMean()
+	mv.Var = desc.NewVariance()
+	mv.BiasCorrection = biasCorrection
+	return &mv
+}
+
+func (m *MeanVar) Increment(v float64) {
+	m.Mean.Increment(v)
+	m.Var.Increment(v)
+}
+
+func (m *MeanVar) Append(mv2 *MeanVar) {
+	m.Mean.Append(mv2.Mean)
+	m.Var.Append(mv2.Var)
+}
+
 type KsCalculator struct {
-	Mean *desc.Mean
-	Var  *desc.Variance
+	*MeanVar
 }
 
 func NewKsCalculator() *KsCalculator {
 	kc := KsCalculator{}
-	kc.Mean = desc.NewMean()
-	kc.Var = desc.NewVarianceWithBiasCorrection()
+	kc.MeanVar = NewMeanVar(true)
 	return &kc
 }
 
-func (kc *KsCalculator) Increment(v float64) {
-	kc.Mean.Increment(v)
-	kc.Var.Increment(v)
+func (k *KsCalculator) Append(k2 *KsCalculator) {
+	k.MeanVar.Append(k2.MeanVar)
 }
 
-func (kc *KsCalculator) Append(kc2 *KsCalculator) {
-	kc.Mean.Append(kc2.Mean)
-	kc.Var.Append(kc2.Var)
+type SCovCalculator struct {
+	MeanVars []*MeanVar
+}
+
+func NewSCovCalculator(maxL int, biasCorrection bool) *SCovCalculator {
+	s := SCovCalculator{}
+	s.MeanVars = make([]*MeanVar, maxL)
+	for i := 0; i < maxL; i++ {
+		s.MeanVars[i] = NewMeanVar(biasCorrection)
+	}
+
+	return &s
+}
+
+func (s *SCovCalculator) Increment(xs, ys []float64, i int) {
+	cov := correlation.NewBivariateCovariance(false)
+	for i := 0; i < len(xs); i++ {
+		x, y := xs[i], ys[i]
+		cov.Increment(x, y)
+	}
+	v := cov.GetResult()
+	if !math.IsNaN(v) {
+		s.MeanVars[i].Increment(v)
+	}
+}
+
+func (s *SCovCalculator) Append(s2 *SCovCalculator) {
+	for i := 0; i < len(s2.MeanVars); i++ {
+		if len(s.MeanVars) > i {
+			s.MeanVars[i].Append(s2.MeanVars[i])
+		} else {
+			s.MeanVars = append(s.MeanVars, s2.MeanVars[i])
+		}
+	}
 }
