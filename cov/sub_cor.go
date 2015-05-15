@@ -73,6 +73,9 @@ func SubMatrixMCov(subMatrix [][]float64, cm *MeanCovCalculator, maxl int) {
 // Calculate rate mutation covariance for a substituion matrix.
 func SubMatrixRCov(subMatrix [][]float64, cr *MeanCovCalculator, maxl int) {
 	means := make([]*desc.Mean, len(subMatrix[0]))
+	for i := 0; i < len(means); i++ {
+		means[i] = desc.NewMean()
+	}
 	for i := 0; i < len(subMatrix); i++ {
 		for j := 0; j < len(subMatrix[i]); j++ {
 			means[j].Increment(subMatrix[i][j])
