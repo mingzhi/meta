@@ -234,6 +234,30 @@ func createCovResult(c *cov.Calculators, maxl, pos int) (res CovResult) {
 			res.MeanXY = append(res.MeanXY, xy)
 			res.CtN = append(res.CtN, n)
 		}
+
+		v = c.SCov.MeanVars[i].Mean.GetResult()
+		n = c.SCov.MeanVars[i].Mean.GetN()
+		if !math.IsNaN(v) {
+			res.CsIndices = append(res.CsIndices, i)
+			res.Cs = append(res.Cs, v)
+			res.CsN = append(res.CsN, n)
+		}
+
+		v = c.MCov.MeanVars[i].Mean.GetResult()
+		n = c.MCov.MeanVars[i].Mean.GetN()
+		if !math.IsNaN(v) {
+			res.CmIndices = append(res.CmIndices, i)
+			res.Cm = append(res.Cm, v)
+			res.CmN = append(res.CmN, n)
+		}
+
+		v = c.RCov.MeanVars[i].Mean.GetResult()
+		n = c.RCov.MeanVars[i].Mean.GetN()
+		if !math.IsNaN(v) {
+			res.CrIndices = append(res.CrIndices, i)
+			res.Cr = append(res.Cr, v)
+			res.CrN = append(res.CrN, n)
+		}
 	}
 	return
 }

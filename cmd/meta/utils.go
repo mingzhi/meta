@@ -13,6 +13,15 @@ type CovResult struct {
 	CtN       []int
 	N         int
 	NReads    int
+	Cm        []float64
+	CmIndices []int
+	CmN       []int
+	Cs        []float64
+	CsIndices []int
+	CsN       []int
+	Cr        []float64
+	CrIndices []int
+	CrN       []int
 }
 
 func MakeDir(d string) {
