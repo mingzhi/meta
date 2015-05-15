@@ -79,21 +79,21 @@ func (k *KsCalculator) Append(k2 *KsCalculator) {
 	k.MeanVar.Append(k2.MeanVar)
 }
 
-type SCovCalculator struct {
+type MeanCovCalculator struct {
 	MeanVars []*MeanVar
 }
 
-func NewSCovCalculator(maxL int, biasCorrection bool) *SCovCalculator {
-	s := SCovCalculator{}
-	s.MeanVars = make([]*MeanVar, maxL)
-	for i := 0; i < maxL; i++ {
+func NewMeanCovCalculator(maxl int, biasCorrection bool) *MeanCovCalculator {
+	s := MeanCovCalculator{}
+	s.MeanVars = make([]*MeanVar, maxl)
+	for i := 0; i < maxl; i++ {
 		s.MeanVars[i] = NewMeanVar(biasCorrection)
 	}
 
 	return &s
 }
 
-func (s *SCovCalculator) Increment(xs, ys []float64, i int) {
+func (s *MeanCovCalculator) Increment(xs, ys []float64, i int) {
 	cov := correlation.NewBivariateCovariance(false)
 	for i := 0; i < len(xs); i++ {
 		x, y := xs[i], ys[i]
@@ -105,7 +105,7 @@ func (s *SCovCalculator) Increment(xs, ys []float64, i int) {
 	}
 }
 
-func (s *SCovCalculator) Append(s2 *SCovCalculator) {
+func (s *MeanCovCalculator) Append(s2 *MeanCovCalculator) {
 	for i := 0; i < len(s2.MeanVars); i++ {
 		if len(s.MeanVars) > i {
 			s.MeanVars[i].Append(s2.MeanVars[i])
@@ -113,4 +113,28 @@ func (s *SCovCalculator) Append(s2 *SCovCalculator) {
 			s.MeanVars = append(s.MeanVars, s2.MeanVars[i])
 		}
 	}
+}
+
+type Calculators struct {
+	Ks               *KsCalculator
+	TCov             *CovCalculator
+	SCov, MCov, RCov *MeanCovCalculator
+}
+
+func (c *Calculators) Append(c2 *Calculators) {
+	c.Ks.Append(c2.Ks)
+	c.TCov.Append(c2.TCov)
+	c.SCov.Append(c2.SCov)
+	c.RCov.Append(c2.RCov)
+	c.MCov.Append(c2.MCov)
+}
+
+func NewCalculators(maxl int, biasCorrection bool) *Calculators {
+	c := Calculators{}
+	c.Ks = NewKsCalculator()
+	c.TCov = NewCovCalculator(maxl, biasCorrection)
+	c.SCov = NewMeanCovCalculator(maxl, biasCorrection)
+	c.MCov = NewMeanCovCalculator(maxl, biasCorrection)
+	c.RCov = NewMeanCovCalculator(maxl, biasCorrection)
+	return &c
 }

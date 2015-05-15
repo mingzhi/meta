@@ -190,28 +190,28 @@ func (cmd *cmdCovGenomes) ReadAlignments(prefix string) (alns []seqrecord.SeqRec
 
 // Calculate covariances for records.
 func (cmd *cmdCovGenomes) Cov(records []seqrecord.SeqRecords, g genome.Genome, pos int, covFunc cov.GenomesOneFunc) (res CovResult) {
-	kc, cc := cov.GenomesCalc(records, g, cmd.maxl, pos, covFunc)
+	c := cov.GenomesCalc(records, g, cmd.maxl, pos, covFunc)
 	maxl := cmd.maxl
-	res = createCovResult(kc, cc, maxl, pos)
+	res = createCovResult(c, maxl, pos)
 	return
 }
 
 func (cmd *cmdCovGenomes) covBoot(records []seqrecord.SeqRecords, g genome.Genome, pos int, covFunc cov.GenomesOneFunc) (results []CovResult) {
-	kcs, ccs := cov.GenomesBoot(records, g, cmd.maxl, pos, cmd.numBoot, covFunc)
+	cc := cov.GenomesBoot(records, g, cmd.maxl, pos, cmd.numBoot, covFunc)
 	maxl := cmd.maxl
-	for i := 0; i < len(kcs); i++ {
-		kc, cc := kcs[i], ccs[i]
-		res := createCovResult(kc, cc, maxl, pos)
+	for i := 0; i < len(cc); i++ {
+		c := cc[i]
+		res := createCovResult(c, maxl, pos)
 		results = append(results, res)
 	}
 	return
 }
 
-func createCovResult(kc *cov.KsCalculator, cc *cov.CovCalculator, maxl, pos int) (res CovResult) {
+func createCovResult(c *cov.Calculators, maxl, pos int) (res CovResult) {
 	// Process and return a cov result.
-	res.Ks = kc.Mean.GetResult()
-	res.VarKs = kc.Var.GetResult()
-	res.N = kc.Mean.GetN()
+	res.Ks = c.Ks.Mean.GetResult()
+	res.VarKs = c.Ks.Var.GetResult()
+	res.N = c.Ks.Mean.GetN()
 
 	// To use base distiance (step = 1) or codon distance (step = 3)
 	var step, size int
@@ -225,9 +225,9 @@ func createCovResult(kc *cov.KsCalculator, cc *cov.CovCalculator, maxl, pos int)
 
 	for i := 0; i < size; i++ {
 		index := step * i
-		v := cc.GetResult(index)
-		xy := cc.GetMeanXY(index)
-		n := cc.GetN(index)
+		v := c.TCov.GetResult(index)
+		xy := c.TCov.GetMeanXY(index)
+		n := c.TCov.GetN(index)
 		if !math.IsNaN(v) {
 			res.CtIndices = append(res.CtIndices, i)
 			res.Ct = append(res.Ct, v)

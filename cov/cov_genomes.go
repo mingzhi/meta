@@ -8,10 +8,10 @@ import (
 	"runtime"
 )
 
-type GenomesOneFunc func(records seqrecord.SeqRecords, g genome.Genome, maxl, pos int, kc *KsCalculator, cc *CovCalculator)
+type GenomesOneFunc func(records seqrecord.SeqRecords, g genome.Genome, maxl, pos int, c *Calculators)
 
-func GenomesBoot(alignments []seqrecord.SeqRecords, g genome.Genome, maxl, pos, numBoot int, oneFunc GenomesOneFunc) ([]*KsCalculator, []*CovCalculator) {
-	biasCorrection := true
+func GenomesBoot(alignments []seqrecord.SeqRecords, g genome.Genome, maxl, pos, numBoot int, oneFunc GenomesOneFunc) []*Calculators {
+	biasCorrection := false
 	// Create job channel.
 	jobs := make(chan seqrecord.SeqRecords)
 	go func() {
@@ -23,22 +23,15 @@ func GenomesBoot(alignments []seqrecord.SeqRecords, g genome.Genome, maxl, pos, 
 
 	ncpu := runtime.GOMAXPROCS(0)
 
-	type result struct {
-		cc *CovCalculator
-		kc *KsCalculator
-	}
-
 	done := make(chan bool)
 
-	resultChan := make(chan result)
+	resultChan := make(chan *Calculators)
 	for i := 0; i < ncpu; i++ {
 		go func() {
 			for records := range jobs {
-				kc := NewKsCalculator()
-				cc := NewCovCalculator(maxl, biasCorrection)
-				oneFunc(records, g, maxl, pos, kc, cc)
-				res := result{cc: cc, kc: kc}
-				resultChan <- res
+				c := NewCalculators(maxl, biasCorrection)
+				oneFunc(records, g, maxl, pos, c)
+				resultChan <- c
 			}
 			done <- true
 		}()
@@ -51,7 +44,7 @@ func GenomesBoot(alignments []seqrecord.SeqRecords, g genome.Genome, maxl, pos, 
 		}
 	}()
 
-	results := []result{}
+	results := []*Calculators{}
 	for res := range resultChan {
 		results = append(results, res)
 	}
@@ -69,19 +62,17 @@ func GenomesBoot(alignments []seqrecord.SeqRecords, g genome.Genome, maxl, pos, 
 		}
 	}()
 
-	bootResultChan := make(chan result)
+	bootResultChan := make(chan *Calculators)
 	for i := 0; i < ncpu; i++ {
 		go func() {
 			for sample := range bootJobs {
-				kc := NewKsCalculator()
-				cc := NewCovCalculator(maxl, biasCorrection)
+				c := NewCalculators(maxl, biasCorrection)
 				for j := 0; j < len(sample); j++ {
 					index := sample[j]
 					res := results[index]
-					kc.Append(res.kc)
-					cc.Append(res.cc)
+					c.Append(res)
 				}
-				bootResultChan <- result{cc: cc, kc: kc}
+				bootResultChan <- c
 			}
 			done <- true
 		}()
@@ -94,17 +85,15 @@ func GenomesBoot(alignments []seqrecord.SeqRecords, g genome.Genome, maxl, pos, 
 		}
 	}()
 
-	kcs := []*KsCalculator{}
-	ccs := []*CovCalculator{}
+	cc := []*Calculators{}
 	for res := range bootResultChan {
-		kcs = append(kcs, res.kc)
-		ccs = append(ccs, res.cc)
+		cc = append(cc, res)
 	}
 
-	return kcs, ccs
+	return cc
 }
 
-func GenomesCalc(alignments []seqrecord.SeqRecords, g genome.Genome, maxl, pos int, covFunc GenomesOneFunc) (kc *KsCalculator, cc *CovCalculator) {
+func GenomesCalc(alignments []seqrecord.SeqRecords, g genome.Genome, maxl, pos int, covFunc GenomesOneFunc) *Calculators {
 	jobs := make(chan seqrecord.SeqRecords)
 	go func() {
 		defer close(jobs)
@@ -116,41 +105,35 @@ func GenomesCalc(alignments []seqrecord.SeqRecords, g genome.Genome, maxl, pos i
 	ncpu := runtime.GOMAXPROCS(0)
 
 	// Create result channel.
-	type result struct {
-		cc *CovCalculator
-		kc *KsCalculator
-	}
-	results := make(chan result)
+	results := make(chan *Calculators)
 	for i := 0; i < ncpu; i++ {
 		go func() {
-			cc := NewCovCalculator(maxl, true)
-			kc := NewKsCalculator()
+			c := NewCalculators(maxl, false)
 			for records := range jobs {
-				covFunc(records, g, maxl, pos, kc, cc)
+				covFunc(records, g, maxl, pos, c)
 			}
-			results <- result{cc, kc}
+			results <- c
 		}()
 	}
 
 	// Receive results from the chan.
+	var c *Calculators
 	for i := 0; i < ncpu; i++ {
 		r := <-results
 		if i == 0 {
-			cc = r.cc
-			kc = r.kc
+			c = r
 		} else {
-			cc.Append(r.cc)
-			kc.Append(r.kc)
+			c.Append(r)
 		}
 	}
 
-	return
+	return c
 }
 
-type GenomesFunc func(alignments []seqrecord.SeqRecords, g genome.Genome, maxl, pos int) (kc *KsCalculator, cc *CovCalculator)
+type GenomesFunc func(alignments []seqrecord.SeqRecords, g genome.Genome, maxl, pos int) (c *Calculators)
 
 // Calculate correlations of substitutions in genomic sequences.
-func GenomesVsGenomes(alignments []seqrecord.SeqRecords, g genome.Genome, maxl, pos int) (kc *KsCalculator, cc *CovCalculator) {
+func GenomesVsGenomes(alignments []seqrecord.SeqRecords, g genome.Genome, maxl, pos int) (c *Calculators) {
 	// Create job channel.
 	jobs := make(chan seqrecord.SeqRecords)
 	go func() {
@@ -163,19 +146,14 @@ func GenomesVsGenomes(alignments []seqrecord.SeqRecords, g genome.Genome, maxl, 
 	ncpu := runtime.GOMAXPROCS(0)
 
 	// Create result channel.
-	type result struct {
-		cc *CovCalculator
-		kc *KsCalculator
-	}
-	results := make(chan result)
+	results := make(chan *Calculators)
 	for i := 0; i < ncpu; i++ {
 		go func() {
-			cc := NewCovCalculator(maxl, true)
-			kc := NewKsCalculator()
+			c := NewCalculators(maxl, false)
 			for records := range jobs {
-				GenomesVsGenomesOne(records, g, maxl, pos, kc, cc)
+				GenomesVsGenomesOne(records, g, maxl, pos, c)
 			}
-			results <- result{cc, kc}
+			results <- c
 		}()
 	}
 
@@ -183,19 +161,16 @@ func GenomesVsGenomes(alignments []seqrecord.SeqRecords, g genome.Genome, maxl, 
 	for i := 0; i < ncpu; i++ {
 		r := <-results
 		if i == 0 {
-			cc = r.cc
-			kc = r.kc
+			c = r
 		} else {
-			cc.Append(r.cc)
-			kc.Append(r.kc)
+			c.Append(r)
 		}
 	}
 
 	return
 }
 
-func GenomesVsGenomesOne(records seqrecord.SeqRecords, g genome.Genome, maxl, pos int,
-	kc *KsCalculator, cc *CovCalculator) {
+func GenomesVsGenomesOne(records seqrecord.SeqRecords, g genome.Genome, maxl, pos int, c *Calculators) {
 	acc := g.RefAcc()
 	refRecords := seqrecord.SeqRecords{}
 	for _, r := range records {
@@ -243,6 +218,7 @@ func GenomesVsGenomesOne(records seqrecord.SeqRecords, g genome.Genome, maxl, po
 		}
 
 		// compare substituations according to the profile.
+		subMatrix := [][]float64{}
 		for j := 0; j < len(records); j++ {
 			read1 := []byte{}
 			for i, b := range ref.Nucl {
@@ -259,14 +235,18 @@ func GenomesVsGenomesOne(records seqrecord.SeqRecords, g genome.Genome, maxl, po
 					}
 				}
 				subs := SubProfile(read1, read2, prof, pos)
-				SubCorr(subs, cc, kc, maxl)
+				SubCorr(subs, c.TCov, c.Ks, maxl)
+				subMatrix = append(subMatrix, subs)
 			}
 		}
+		SubMatrixSCov(subMatrix, c.SCov, maxl)
+		SubMatrixMCov(subMatrix, c.MCov, maxl)
+		SubMatrixRCov(subMatrix, c.RCov, maxl)
 	}
 }
 
 // Calculate correlations of substituions in genomic sequences.
-func GenomesVsGenome(alignments []seqrecord.SeqRecords, g genome.Genome, maxl, pos int) (kc *KsCalculator, cc *CovCalculator) {
+func GenomesVsGenome(alignments []seqrecord.SeqRecords, g genome.Genome, maxl, pos int) (c *Calculators) {
 	// Create job channel.
 	jobs := make(chan seqrecord.SeqRecords)
 	go func() {
@@ -279,19 +259,14 @@ func GenomesVsGenome(alignments []seqrecord.SeqRecords, g genome.Genome, maxl, p
 	ncpu := runtime.GOMAXPROCS(0)
 
 	// Create result channel.
-	type result struct {
-		cc *CovCalculator
-		kc *KsCalculator
-	}
-	results := make(chan result)
+	results := make(chan *Calculators)
 	for i := 0; i < ncpu; i++ {
 		go func() {
-			cc := NewCovCalculator(maxl, true)
-			kc := NewKsCalculator()
+			c := NewCalculators(maxl, false)
 			for records := range jobs {
-				GenomesVsGenomeOne(records, g, maxl, pos, kc, cc)
+				GenomesVsGenomeOne(records, g, maxl, pos, c)
 			}
-			results <- result{cc, kc}
+			results <- c
 		}()
 	}
 
@@ -299,19 +274,16 @@ func GenomesVsGenome(alignments []seqrecord.SeqRecords, g genome.Genome, maxl, p
 	for i := 0; i < ncpu; i++ {
 		r := <-results
 		if i == 0 {
-			cc = r.cc
-			kc = r.kc
+			c = r
 		} else {
-			cc.Append(r.cc)
-			kc.Append(r.kc)
+			c.Append(r)
 		}
 	}
 
 	return
 }
 
-func GenomesVsGenomeOne(records seqrecord.SeqRecords, g genome.Genome, maxl, pos int,
-	kc *KsCalculator, cc *CovCalculator) {
+func GenomesVsGenomeOne(records seqrecord.SeqRecords, g genome.Genome, maxl, pos int, c *Calculators) {
 	acc := g.RefAcc()
 	refRecords := seqrecord.SeqRecords{}
 	for _, r := range records {
@@ -357,6 +329,7 @@ func GenomesVsGenomeOne(records seqrecord.SeqRecords, g genome.Genome, maxl, pos
 			prof = append(prof, g.PosProfile[:end]...)
 		}
 
+		subMatrix := [][]float64{}
 		for _, r := range records {
 			if ref.Genome != r.Genome {
 				read := []byte{}
@@ -367,9 +340,14 @@ func GenomesVsGenomeOne(records seqrecord.SeqRecords, g genome.Genome, maxl, pos
 				}
 
 				subs := SubProfile(read, nucl, prof, pos)
-				SubCorr(subs, cc, kc, maxl)
+				SubCorr(subs, c.TCov, c.Ks, maxl)
+				subMatrix = append(subMatrix, subs)
 			}
 		}
+
+		SubMatrixSCov(subMatrix, c.SCov, maxl)
+		SubMatrixMCov(subMatrix, c.MCov, maxl)
+		SubMatrixRCov(subMatrix, c.RCov, maxl)
 	}
 
 }
