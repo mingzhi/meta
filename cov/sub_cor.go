@@ -44,6 +44,9 @@ func SubMatrixSCov(subMatrix [][]float64, cs *MeanCovCalculator, maxl int) {
 	for i := 0; i < len(ints); i++ {
 		for j := i; j < len(ints); j++ {
 			l := ints[j] - ints[i]
+			if l >= maxl {
+				break
+			}
 			xs, ys := []float64{}, []float64{}
 			for k := 0; k < len(subMatrix); k++ {
 				x, y := subMatrix[k][i], subMatrix[k][j]
@@ -66,6 +69,9 @@ func SubMatrixMCov(subMatrix [][]float64, cm *MeanCovCalculator, maxl int) {
 		for i := 0; i < len(ints); i++ {
 			for j := i; j < len(ints); j++ {
 				l := ints[j] - ints[i]
+				if l >= maxl {
+					break
+				}
 				if _, found := m[l]; !found {
 					m[l] = make([][]float64, 2)
 				}
