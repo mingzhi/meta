@@ -10,7 +10,55 @@ import (
 
 type GenomesOneFunc func(records seqrecord.SeqRecords, g genome.Genome, maxl, pos int, c *Calculators)
 
-func GenomesBoot(alignments []seqrecord.SeqRecords, g genome.Genome, maxl, pos, numBoot int, oneFunc GenomesOneFunc) []*Calculators {
+func GenomesCalc(alignments []seqrecord.SeqRecords, g genome.Genome, maxl, pos int, oneFunc GenomesOneFunc) []*Calculators {
+	return genomeCalc(alignments, g, maxl, pos, oneFunc)
+}
+
+func GenomesBoot(alignments []seqrecord.SeqRecords, g genome.Genome, maxl, pos, numBoot int, oneFunc GenomesOneFunc) <-chan []*Calculators {
+	results := genomeCalc(alignments, g, maxl, pos, oneFunc)
+
+	// bootstrapping
+	bootJobs := make(chan []int)
+	go func() {
+		defer close(bootJobs)
+		for i := 0; i < numBoot; i++ {
+			sample := make([]int, len(results))
+			for j := 0; j < len(sample); j++ {
+				sample[j] = rand.Intn(len(results))
+			}
+			bootJobs <- sample
+		}
+	}()
+
+	ncpu := runtime.GOMAXPROCS(0)
+	bootResultChan := make(chan []*Calculators)
+	done := make(chan bool)
+	for i := 0; i < ncpu; i++ {
+		go func() {
+			for sample := range bootJobs {
+				bootResults := []*Calculators{}
+				for j := 0; j < len(sample); j++ {
+					index := sample[j]
+					res := results[index]
+					bootResults = append(bootResults, res)
+				}
+				bootResultChan <- bootResults
+			}
+			done <- true
+		}()
+	}
+
+	go func() {
+		defer close(bootResultChan)
+		for i := 0; i < ncpu; i++ {
+			<-done
+		}
+	}()
+
+	return bootResultChan
+}
+
+func genomeCalc(alignments []seqrecord.SeqRecords, g genome.Genome, maxl, pos int, oneFunc GenomesOneFunc) []*Calculators {
 	biasCorrection := false
 	// Create job channel.
 	jobs := make(chan seqrecord.SeqRecords)
@@ -49,125 +97,7 @@ func GenomesBoot(alignments []seqrecord.SeqRecords, g genome.Genome, maxl, pos, 
 		results = append(results, res)
 	}
 
-	// bootstrapping
-	bootJobs := make(chan []int)
-	go func() {
-		defer close(bootJobs)
-		for i := 0; i < numBoot; i++ {
-			sample := make([]int, len(results))
-			for j := 0; j < len(sample); j++ {
-				sample[j] = rand.Intn(len(results))
-			}
-			bootJobs <- sample
-		}
-	}()
-
-	bootResultChan := make(chan *Calculators)
-	for i := 0; i < ncpu; i++ {
-		go func() {
-			for sample := range bootJobs {
-				c := NewCalculators(maxl, biasCorrection)
-				for j := 0; j < len(sample); j++ {
-					index := sample[j]
-					res := results[index]
-					c.Append(res)
-				}
-				bootResultChan <- c
-			}
-			done <- true
-		}()
-	}
-
-	go func() {
-		defer close(bootResultChan)
-		for i := 0; i < ncpu; i++ {
-			<-done
-		}
-	}()
-
-	cc := []*Calculators{}
-	for res := range bootResultChan {
-		cc = append(cc, res)
-	}
-
-	return cc
-}
-
-func GenomesCalc(alignments []seqrecord.SeqRecords, g genome.Genome, maxl, pos int, covFunc GenomesOneFunc) *Calculators {
-	jobs := make(chan seqrecord.SeqRecords)
-	go func() {
-		defer close(jobs)
-		for _, records := range alignments {
-			jobs <- records
-		}
-	}()
-
-	ncpu := runtime.GOMAXPROCS(0)
-
-	// Create result channel.
-	results := make(chan *Calculators)
-	for i := 0; i < ncpu; i++ {
-		go func() {
-			c := NewCalculators(maxl, false)
-			for records := range jobs {
-				covFunc(records, g, maxl, pos, c)
-			}
-			results <- c
-		}()
-	}
-
-	// Receive results from the chan.
-	var c *Calculators
-	for i := 0; i < ncpu; i++ {
-		r := <-results
-		if i == 0 {
-			c = r
-		} else {
-			c.Append(r)
-		}
-	}
-
-	return c
-}
-
-type GenomesFunc func(alignments []seqrecord.SeqRecords, g genome.Genome, maxl, pos int) (c *Calculators)
-
-// Calculate correlations of substitutions in genomic sequences.
-func GenomesVsGenomes(alignments []seqrecord.SeqRecords, g genome.Genome, maxl, pos int) (c *Calculators) {
-	// Create job channel.
-	jobs := make(chan seqrecord.SeqRecords)
-	go func() {
-		defer close(jobs)
-		for _, records := range alignments {
-			jobs <- records
-		}
-	}()
-
-	ncpu := runtime.GOMAXPROCS(0)
-
-	// Create result channel.
-	results := make(chan *Calculators)
-	for i := 0; i < ncpu; i++ {
-		go func() {
-			c := NewCalculators(maxl, false)
-			for records := range jobs {
-				GenomesVsGenomesOne(records, g, maxl, pos, c)
-			}
-			results <- c
-		}()
-	}
-
-	// Receive results from the chan.
-	for i := 0; i < ncpu; i++ {
-		r := <-results
-		if i == 0 {
-			c = r
-		} else {
-			c.Append(r)
-		}
-	}
-
-	return
+	return results
 }
 
 func GenomesVsGenomesOne(records seqrecord.SeqRecords, g genome.Genome, maxl, pos int, c *Calculators) {
@@ -243,44 +173,6 @@ func GenomesVsGenomesOne(records seqrecord.SeqRecords, g genome.Genome, maxl, po
 		SubMatrixMCov(subMatrix, c.MCov, maxl)
 		SubMatrixRCov(subMatrix, c.RCov, maxl)
 	}
-}
-
-// Calculate correlations of substituions in genomic sequences.
-func GenomesVsGenome(alignments []seqrecord.SeqRecords, g genome.Genome, maxl, pos int) (c *Calculators) {
-	// Create job channel.
-	jobs := make(chan seqrecord.SeqRecords)
-	go func() {
-		defer close(jobs)
-		for _, records := range alignments {
-			jobs <- records
-		}
-	}()
-
-	ncpu := runtime.GOMAXPROCS(0)
-
-	// Create result channel.
-	results := make(chan *Calculators)
-	for i := 0; i < ncpu; i++ {
-		go func() {
-			c := NewCalculators(maxl, false)
-			for records := range jobs {
-				GenomesVsGenomeOne(records, g, maxl, pos, c)
-			}
-			results <- c
-		}()
-	}
-
-	// Receive results from the chan.
-	for i := 0; i < ncpu; i++ {
-		r := <-results
-		if i == 0 {
-			c = r
-		} else {
-			c.Append(r)
-		}
-	}
-
-	return
 }
 
 func GenomesVsGenomeOne(records seqrecord.SeqRecords, g genome.Genome, maxl, pos int, c *Calculators) {

@@ -190,24 +190,32 @@ func (cmd *cmdCovGenomes) ReadAlignments(prefix string) (alns []seqrecord.SeqRec
 
 // Calculate covariances for records.
 func (cmd *cmdCovGenomes) Cov(records []seqrecord.SeqRecords, g genome.Genome, pos int, covFunc cov.GenomesOneFunc) (res CovResult) {
-	c := cov.GenomesCalc(records, g, cmd.maxl, pos, covFunc)
+	cc := cov.GenomesCalc(records, g, cmd.maxl, pos, covFunc)
 	maxl := cmd.maxl
-	res = createCovResult(c, maxl, pos)
+	res = createCovResult(cc, maxl, pos)
 	return
 }
 
 func (cmd *cmdCovGenomes) covBoot(records []seqrecord.SeqRecords, g genome.Genome, pos int, covFunc cov.GenomesOneFunc) (results []CovResult) {
-	cc := cov.GenomesBoot(records, g, cmd.maxl, pos, cmd.numBoot, covFunc)
 	maxl := cmd.maxl
-	for i := 0; i < len(cc); i++ {
-		c := cc[i]
-		res := createCovResult(c, maxl, pos)
+	cc := cov.GenomesBoot(records, g, maxl, pos, cmd.numBoot, covFunc)
+	for calculators := range cc {
+		res := createCovResult(calculators, maxl, pos)
 		results = append(results, res)
 	}
 	return
 }
 
-func createCovResult(c *cov.Calculators, maxl, pos int) (res CovResult) {
+func createCovResult(cc []*cov.Calculators, maxl, pos int) (res CovResult) {
+	var c *cov.Calculators
+	for i := 0; i < len(cc); i++ {
+		if i == 0 {
+			c = cc[i]
+		} else {
+			c.Append(cc[i])
+		}
+	}
+
 	// Process and return a cov result.
 	res.Ks = c.Ks.Mean.GetResult()
 	res.VarKs = c.Ks.Var.GetResult()
