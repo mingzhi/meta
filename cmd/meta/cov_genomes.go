@@ -198,11 +198,32 @@ func (cmd *cmdCovGenomes) Cov(records []seqrecord.SeqRecords, g genome.Genome, p
 
 func (cmd *cmdCovGenomes) covBoot(records []seqrecord.SeqRecords, g genome.Genome, pos int, covFunc cov.GenomesOneFunc) (results []CovResult) {
 	maxl := cmd.maxl
-	cc := cov.GenomesBoot(records, g, maxl, pos, cmd.numBoot, covFunc)
-	for calculators := range cc {
-		res := createCovResult(calculators, maxl, pos)
+	ccChan := cov.GenomesBoot(records, g, maxl, pos, cmd.numBoot, covFunc)
+	ncpu := *cmd.ncpu
+
+	resChan := make(chan CovResult)
+	done := make(chan bool)
+	for i := 0; i < ncpu; i++ {
+		go func() {
+			for cc := range ccChan {
+				res := createCovResult(cc, maxl, pos)
+				resChan <- res
+			}
+			done <- true
+		}()
+	}
+
+	go func() {
+		defer close(resChan)
+		for i := 0; i < ncpu; i++ {
+			<-done
+		}
+	}()
+
+	for res := range resChan {
 		results = append(results, res)
 	}
+
 	return
 }
 
