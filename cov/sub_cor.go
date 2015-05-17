@@ -72,7 +72,7 @@ func SubMatrixMCov(subMatrix [][]float64, cm *MeanCovCalculator, maxl int) {
 			indexI := ints[i]
 			for j := i; j < len(ints); j++ {
 				indexJ := ints[j]
-				l := indexJ - indexJ
+				l := indexJ - indexI
 				if l >= maxl {
 					break
 				}
