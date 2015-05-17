@@ -5,6 +5,10 @@ import (
 	"math"
 )
 
+const (
+	AlphabetDNA = "ATGCatgc"
+)
+
 // Generate substitution profile according to the position profile.
 func SubProfile(read, nucl, profile []byte, pos int) []float64 {
 	// determine the codon position.
@@ -28,7 +32,7 @@ func SubProfile(read, nucl, profile []byte, pos int) []float64 {
 		} else {
 			match = p == cp
 		}
-		valid := read[i] != '*' && nucl[i] != '*'
+		valid := validate(read[i]) && validate(nucl[i])
 		if match && valid {
 			if read[i] == nucl[i] {
 				subs[i] = 0
@@ -40,4 +44,13 @@ func SubProfile(read, nucl, profile []byte, pos int) []float64 {
 		}
 	}
 	return subs
+}
+
+func validate(r byte) bool {
+	for i := 0; i < len(AlphabetDNA); i++ {
+		if AlphabetDNA[i] == r {
+			return true
+		}
+	}
+	return false
 }
