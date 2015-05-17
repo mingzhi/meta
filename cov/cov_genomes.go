@@ -107,9 +107,10 @@ func fourFoldProfile(records seqrecord.SeqRecords, gc *taxonomy.GeneticCode) []b
 	ffcondon := gc.FFCodons
 	for k := 0; k < n; k++ {
 		profile[k] = true
-		aa := gc.Table[records[0].Nucl[3*k:3*k+3]]
+		codonA := string(records[0].Nucl[3*k : 3*k+3])
+		aa := gc.Table[codonA]
 		for i := 0; i < len(records); i++ {
-			codon := records[i].Nucl[3*k : 3*k+3]
+			codon := string(records[i].Nucl[3*k : 3*k+3])
 			ab := gc.Table[codon]
 			if aa == '-' || aa != ab || !ffcondon[codon] {
 				profile[k] = false
