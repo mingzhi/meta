@@ -207,13 +207,10 @@ func (cmd *cmdCovGenomes) covBoot(records []seqrecord.SeqRecords, g genome.Genom
 }
 
 func createCovResult(cc []*cov.Calculators, maxl, pos int) (res CovResult) {
-	var c *cov.Calculators
+	biasCorrection := false
+	c := cov.NewCalculators(maxl, biasCorrection)
 	for i := 0; i < len(cc); i++ {
-		if i == 0 {
-			c = cc[i]
-		} else {
-			c.Append(cc[i])
-		}
+		c.Append(cc[i])
 	}
 
 	// Process and return a cov result.
