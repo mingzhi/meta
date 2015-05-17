@@ -42,14 +42,16 @@ func SubCorr(subs []float64, cc *CovCalculator, kc *KsCalculator, maxl int) {
 func SubMatrixSCov(subMatrix [][]float64, cs *MeanCovCalculator, maxl int) {
 	ints := getPosIndices(subMatrix[0])
 	for i := 0; i < len(ints); i++ {
+		indexI := ints[i]
 		for j := i; j < len(ints); j++ {
-			l := ints[j] - ints[i]
+			indexJ := ints[j]
+			l := indexJ - indexI
 			if l >= maxl {
 				break
 			}
 			xs, ys := []float64{}, []float64{}
 			for k := 0; k < len(subMatrix); k++ {
-				x, y := subMatrix[k][i], subMatrix[k][j]
+				x, y := subMatrix[k][indexI], subMatrix[k][indexJ]
 				xs = append(xs, x)
 				ys = append(ys, y)
 			}
@@ -67,15 +69,17 @@ func SubMatrixMCov(subMatrix [][]float64, cm *MeanCovCalculator, maxl int) {
 	for k := 0; k < len(subMatrix); k++ {
 		m := make(map[int][][]float64)
 		for i := 0; i < len(ints); i++ {
+			indexI := ints[i]
 			for j := i; j < len(ints); j++ {
-				l := ints[j] - ints[i]
+				indexJ := ints[j]
+				l := indexJ - indexJ
 				if l >= maxl {
 					break
 				}
 				if _, found := m[l]; !found {
 					m[l] = make([][]float64, 2)
 				}
-				x, y := subMatrix[k][i], subMatrix[k][j]
+				x, y := subMatrix[k][indexI], subMatrix[k][indexJ]
 				m[l][0] = append(m[l][0], x)
 				m[l][1] = append(m[l][1], y)
 			}
