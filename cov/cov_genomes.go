@@ -3,7 +3,6 @@ package cov
 import (
 	"github.com/mingzhi/meta/genome"
 	"github.com/mingzhi/ncbiftp/seqrecord"
-	"github.com/mingzhi/ncbiftp/taxonomy"
 	"log"
 	"math/rand"
 	"runtime"
@@ -101,34 +100,6 @@ func genomeCalc(alignments []seqrecord.SeqRecords, g genome.Genome, maxl, pos in
 	return results
 }
 
-func fourFoldProfile(records seqrecord.SeqRecords, gc *taxonomy.GeneticCode) []bool {
-	n := len(records[0].Nucl) / 3
-	profile := make([]bool, n)
-	ffcondon := gc.FFCodons
-	for k := 0; k < n; k++ {
-		profile[k] = true
-		codonA := string(records[0].Nucl[3*k : 3*k+3])
-		aa := gc.Table[codonA]
-		for i := 0; i < len(records); i++ {
-			codon := string(records[i].Nucl[3*k : 3*k+3])
-			ab := gc.Table[codon]
-			if aa == '-' || aa != ab || !ffcondon[codon] {
-				profile[k] = false
-				break
-			}
-		}
-	}
-
-	profile1 := make([]bool, len(records[0].Nucl))
-	for i := 0; i < n; i++ {
-		profile1[3*i] = profile[i]
-	}
-
-	return profile1
-}
-
-var GCMAP map[string]*taxonomy.GeneticCode
-
 func GenomesVsGenomesOne(records seqrecord.SeqRecords, g genome.Genome, maxl, pos int, c *Calculators) {
 	acc := g.RefAcc()
 	refRecords := seqrecord.SeqRecords{}
@@ -139,22 +110,12 @@ func GenomesVsGenomesOne(records seqrecord.SeqRecords, g genome.Genome, maxl, po
 		}
 	}
 
-	if GCMAP == nil {
-		GCMAP = taxonomy.GeneticCodes()
-	}
-
-	gc := GCMAP[records[0].Code]
-
-	ffProfile := fourFoldProfile(records, gc)
-
 	for _, ref := range refRecords {
 		// determine reference position profile.
 		nucl := []byte{}
-		ff := []bool{}
-		for i, b := range ref.Nucl {
+		for _, b := range ref.Nucl {
 			if b != '-' {
 				nucl = append(nucl, b)
-				ff = append(ff, ffProfile[i])
 			}
 		}
 
@@ -184,14 +145,6 @@ func GenomesVsGenomesOne(records seqrecord.SeqRecords, g genome.Genome, maxl, po
 			}
 			prof = g.PosProfile[start:]
 			prof = append(prof, g.PosProfile[:end]...)
-		}
-
-		for i := 0; i < len(prof); i++ {
-			if prof[i] == genome.FourFold {
-				if !ff[i] {
-					prof[i] = genome.ThirdPos
-				}
-			}
 		}
 
 		// compare substituations according to the profile.
