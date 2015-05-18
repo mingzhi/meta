@@ -23,7 +23,7 @@ func SubProfile(read, nucl, profile []byte, pos int) []float64 {
 	case 4:
 		cp = genome.FourFold
 	}
-	subs := make([]float64, len(nucl))
+	subs := make([]float64, len(profile))
 	for i := 0; i < len(subs); i++ {
 		p := profile[i]
 		var match bool
@@ -32,7 +32,7 @@ func SubProfile(read, nucl, profile []byte, pos int) []float64 {
 		} else {
 			match = p == cp
 		}
-		valid := validate(read[i]) && validate(nucl[i])
+		valid := isValidNucl(read[i]) && isValidNucl(nucl[i])
 		if match && valid {
 			if read[i] == nucl[i] {
 				subs[i] = 0
@@ -46,7 +46,7 @@ func SubProfile(read, nucl, profile []byte, pos int) []float64 {
 	return subs
 }
 
-func validate(r byte) bool {
+func isValidNucl(r byte) bool {
 	for i := 0; i < len(AlphabetDNA); i++ {
 		if AlphabetDNA[i] == r {
 			return true

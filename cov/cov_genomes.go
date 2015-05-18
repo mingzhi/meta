@@ -1,6 +1,7 @@
 package cov
 
 import (
+	"github.com/mingzhi/biogo/seq"
 	"github.com/mingzhi/meta/genome"
 	"github.com/mingzhi/ncbiftp/seqrecord"
 	"log"
@@ -100,6 +101,88 @@ func genomeCalc(alignments []seqrecord.SeqRecords, g genome.Genome, maxl, pos in
 	return results
 }
 
+// strip gaps.
+func stripGaps(nucl []byte) []byte {
+	s := []byte{}
+	for i := 0; i < len(nucl); i++ {
+		if isValidNucl(nucl[i]) {
+			s = append(s, nucl[i])
+		}
+	}
+
+	return s
+}
+
+// strip reference-gapped positions.
+func stripRefGaps(ref []byte, read []byte) []byte {
+	read1 := []byte{}
+	for i, b := range ref {
+		if isValidNucl(b) {
+			read1 = append(read1, read[i])
+		}
+	}
+	return read1
+}
+
+// determine rightmost submatch length.
+func submatch(rec seqrecord.SeqRecord, g genome.Genome) int {
+	start := rec.Loc.From - 1
+	end := rec.Loc.To
+
+	var s []byte
+	if end > start {
+		s = g.Seq[start:end]
+		if rec.Loc.Strand == "-" {
+			s = seq.Reverse(seq.Complement(s))
+		}
+	} else {
+		s = g.Seq[start:]
+		s = append(s, g.Seq[:end]...)
+	}
+
+	nucl := stripGaps(rec.Nucl)
+	i := 0
+	for ; i < len(nucl) && i < len(s); i++ {
+		if nucl[i] != s[i] {
+			break
+		}
+	}
+
+	return i
+}
+
+// get rightmost matched position profile.
+func getProfile(rec seqrecord.SeqRecord, g genome.Genome) (prof []byte) {
+	lenOfMatched := submatch(rec, g)
+
+	start := rec.Loc.From - 1
+	end := rec.Loc.To
+	if end > start {
+		prof = g.PosProfile[start:end]
+		if rec.Loc.Strand == "-" {
+			prof = seq.Reverse(prof)
+		}
+	} else {
+		prof = g.PosProfile[start:]
+		prof = append(prof, g.PosProfile[:end]...)
+	}
+
+	prof = prof[:lenOfMatched]
+
+	return
+}
+
+// calculate correlations.
+func subMatrixCorr(subMatrix [][]float64, maxl int, c *Calculators) {
+	for _, subs := range subMatrix {
+		SubCorr(subs, c.TCov, c.Ks, maxl)
+	}
+
+	SubMatrixSCov(subMatrix, c.SCov, maxl)
+	SubMatrixMCov(subMatrix, c.MCov, maxl)
+	SubMatrixRCov(subMatrix, c.RCov, maxl)
+}
+
 func GenomesVsGenomesOne(records seqrecord.SeqRecords, g genome.Genome, maxl, pos int, c *Calculators) {
 	acc := g.RefAcc()
 	refRecords := seqrecord.SeqRecords{}
@@ -112,66 +195,23 @@ func GenomesVsGenomesOne(records seqrecord.SeqRecords, g genome.Genome, maxl, po
 
 	for _, ref := range refRecords {
 		// determine reference position profile.
-		nucl := []byte{}
-		for _, b := range ref.Nucl {
-			if b != '-' {
-				nucl = append(nucl, b)
-			}
-		}
-
-		start := ref.Loc.From - 1
-		end := ref.Loc.To - 3 // stop codon!
-		var prof []byte
-		if end > start {
-			if end-start != len(nucl) {
-				if end-start < len(nucl) {
-					end = start + len(nucl)
-				} else {
-					log.Printf("Protein: %s profile length %d sequence length %d\n", ref.Id, end-start, len(nucl))
-					continue
-				}
-			}
-			prof = g.PosProfile[start:end]
-		} else {
-			if len(g.PosProfile)-start+end > len(nucl) {
-				// [TODO]
-				continue
-			} else {
-				end = len(nucl) + start - len(g.PosProfile)
-				// [TODO]
-				if end <= 0 {
-					continue
-				}
-			}
-			prof = g.PosProfile[start:]
-			prof = append(prof, g.PosProfile[:end]...)
+		prof := getProfile(ref, g)
+		if len(prof) < len(ref.Nucl)/2 {
+			log.Printf("%d\t%d\n", len(prof), len(ref.Nucl))
+			continue
 		}
 
 		// compare substituations according to the profile.
 		subMatrix := [][]float64{}
 		for j := 0; j < len(records); j++ {
-			read1 := []byte{}
-			for i, b := range ref.Nucl {
-				if b != '-' {
-					read1 = append(read1, records[j].Nucl[i])
-				}
-			}
-
+			read1 := stripRefGaps(ref.Nucl, records[j].Nucl)
 			for k := j + 1; k < len(records); k++ {
-				read2 := []byte{}
-				for i, b := range ref.Nucl {
-					if b != '-' {
-						read2 = append(read2, records[k].Nucl[i])
-					}
-				}
+				read2 := stripRefGaps(ref.Nucl, records[k].Nucl)
 				subs := SubProfile(read1, read2, prof, pos)
-				SubCorr(subs, c.TCov, c.Ks, maxl)
 				subMatrix = append(subMatrix, subs)
 			}
 		}
-		SubMatrixSCov(subMatrix, c.SCov, maxl)
-		SubMatrixMCov(subMatrix, c.MCov, maxl)
-		SubMatrixRCov(subMatrix, c.RCov, maxl)
+		subMatrixCorr(subMatrix, maxl, c)
 	}
 }
 
@@ -186,60 +226,23 @@ func GenomesVsGenomeOne(records seqrecord.SeqRecords, g genome.Genome, maxl, pos
 	}
 
 	for _, ref := range refRecords {
-		nucl := []byte{}
-		for _, b := range ref.Nucl {
-			if b != '-' {
-				nucl = append(nucl, b)
-			}
-		}
-
-		start := ref.Loc.From - 1
-		end := ref.Loc.To - 3 // stop codon!
-		var prof []byte
-		if end > start {
-			if end-start != len(nucl) {
-				if end-start < len(nucl) {
-					end = start + len(nucl)
-				} else {
-					log.Printf("Protein: %s profile length %d sequence length %d\n", ref.Id, end-start, len(nucl))
-					continue
-				}
-			}
-			prof = g.PosProfile[start:end]
-		} else {
-			if len(g.PosProfile)-start+end > len(nucl) {
-				// [TODO]
-				continue
-			} else {
-				end = len(nucl) + start - len(g.PosProfile)
-				if end <= 0 {
-					// [TODO]
-					continue
-				}
-			}
-			prof = g.PosProfile[start:]
-			prof = append(prof, g.PosProfile[:end]...)
+		nucl := stripGaps(ref.Nucl)
+		// determine reference position profile.
+		prof := getProfile(ref, g)
+		if len(prof) < len(ref.Nucl)/2 {
+			log.Printf("%d\t%d\n", len(prof), len(ref.Nucl))
+			continue
 		}
 
 		subMatrix := [][]float64{}
 		for _, r := range records {
 			if ref.Genome != r.Genome {
-				read := []byte{}
-				for i, b := range ref.Nucl {
-					if b != '-' {
-						read = append(read, r.Nucl[i])
-					}
-				}
-
+				read := stripRefGaps(ref.Nucl, r.Nucl)
 				subs := SubProfile(read, nucl, prof, pos)
-				SubCorr(subs, c.TCov, c.Ks, maxl)
 				subMatrix = append(subMatrix, subs)
 			}
 		}
-
-		SubMatrixSCov(subMatrix, c.SCov, maxl)
-		SubMatrixMCov(subMatrix, c.MCov, maxl)
-		SubMatrixRCov(subMatrix, c.RCov, maxl)
+		subMatrixCorr(subMatrix, maxl, c)
 	}
 
 }
