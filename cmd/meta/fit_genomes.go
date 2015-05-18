@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/mingzhi/meta/fit"
 	"github.com/mingzhi/meta/strain"
+	"math"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -154,10 +155,28 @@ func fitExp(results []CovResult, fitStart, fitEnd int) (fitResults []FitResult) 
 	}()
 
 	for fr := range fitResChan {
-		fitResults = append(fitResults, fr)
+		if !isNaN(fr) {
+			fitResults = append(fitResults, fr)
+		}
 	}
 
 	return
+}
+
+func isNaN(res FitResult) bool {
+	floats := []float64{}
+	floats = append(floats, res.Ks)
+	floats = append(floats, res.B1)
+	floats = append(floats, res.B0)
+	floats = append(floats, res.B2)
+
+	for _, v := range floats {
+		if math.IsNaN(v) {
+			return true
+		}
+	}
+
+	return false
 }
 
 func fromJson(filePath string) (results []CovResult) {
