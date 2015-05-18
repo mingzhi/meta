@@ -103,14 +103,7 @@ func genomeCalc(alignments []seqrecord.SeqRecords, g genome.Genome, maxl, pos in
 
 // strip gaps.
 func stripGaps(nucl []byte) []byte {
-	s := []byte{}
-	for i := 0; i < len(nucl); i++ {
-		if isValidNucl(nucl[i]) {
-			s = append(s, nucl[i])
-		}
-	}
-
-	return s
+	return stripRefGaps(nucl, nucl)
 }
 
 // strip reference-gapped positions.
@@ -124,50 +117,35 @@ func stripRefGaps(ref []byte, read []byte) []byte {
 	return read1
 }
 
-// determine rightmost submatch length.
-func submatch(rec seqrecord.SeqRecord, g genome.Genome) int {
-	start := rec.Loc.From - 1
-	end := rec.Loc.To
-
-	var s []byte
-	if end > start {
-		s = g.Seq[start:end]
-		if rec.Loc.Strand == "-" {
-			s = seq.Reverse(seq.Complement(s))
-		}
-	} else {
-		s = g.Seq[start:]
-		s = append(s, g.Seq[:end]...)
-	}
-
-	nucl := stripGaps(rec.Nucl)
-	i := 0
-	for ; i < len(nucl) && i < len(s); i++ {
-		if nucl[i] != s[i] {
-			break
-		}
-	}
-
-	return i
-}
-
 // get rightmost matched position profile.
 func getProfile(rec seqrecord.SeqRecord, g genome.Genome) (prof []byte) {
-	lenOfMatched := submatch(rec, g)
-
 	start := rec.Loc.From - 1
 	end := rec.Loc.To
+
+	var nucl []byte
 	if end > start {
+		nucl = g.Seq[start:end]
 		prof = g.PosProfile[start:end]
 		if rec.Loc.Strand == "-" {
+			nucl = seq.Reverse(seq.Complement(nucl))
 			prof = seq.Reverse(prof)
 		}
 	} else {
+		nucl = g.Seq[start:]
+		nucl = append(nucl, g.Seq[:end]...)
 		prof = g.PosProfile[start:]
 		prof = append(prof, g.PosProfile[:end]...)
 	}
 
-	prof = prof[:lenOfMatched]
+	read := stripGaps(rec.Nucl)
+	l := 0
+	for ; l < len(read) && l < len(nucl); l++ {
+		if read[l] != nucl[l] {
+			break
+		}
+	}
+
+	prof = prof[:l]
 
 	return
 }
@@ -237,7 +215,9 @@ func genomeOne(records seqrecord.SeqRecords, g genome.Genome, maxl, pos int, c *
 		pairs := f(ref, records)
 		subMatrix := [][]float64{}
 		for _, pair := range pairs {
-			subs := SubProfile(pair.read1, pair.read2, prof, pos)
+			read1 := pair.read1[:len(prof)]
+			read2 := pair.read2[:len(prof)]
+			subs := SubProfile(read1, read2, prof, pos)
 			subMatrix = append(subMatrix, subs)
 		}
 		subMatrixCorr(subMatrix, maxl, c)
