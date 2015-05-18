@@ -183,66 +183,73 @@ func subMatrixCorr(subMatrix [][]float64, maxl int, c *Calculators) {
 	SubMatrixRCov(subMatrix, c.RCov, maxl)
 }
 
-func GenomesVsGenomesOne(records seqrecord.SeqRecords, g genome.Genome, maxl, pos int, c *Calculators) {
-	acc := g.RefAcc()
-	refRecords := seqrecord.SeqRecords{}
+func getRefRecords(records seqrecord.SeqRecords, g genome.Genome) (refRecords seqrecord.SeqRecords) {
 	for _, r := range records {
-		acc2 := genome.FindRefAcc(r.Genome)
-		if acc == acc2 {
+		acc := genome.FindRefAcc(r.Genome)
+		if acc == g.RefAcc() {
 			refRecords = append(refRecords, r)
 		}
 	}
+	return
+}
 
+type readPair struct {
+	read1, read2 []byte
+}
+
+type readsVsFunc func(ref seqrecord.SeqRecord, records seqrecord.SeqRecords) (pairs []readPair)
+
+func readsVsReads(ref seqrecord.SeqRecord, records seqrecord.SeqRecords) (pairs []readPair) {
+	for i := 0; i < len(records); i++ {
+		read1 := stripRefGaps(ref.Nucl, records[i].Nucl)
+		for j := i + 1; j < len(records); j++ {
+			read2 := stripRefGaps(ref.Nucl, records[j].Nucl)
+			pairs = append(pairs, readPair{read1, read2})
+		}
+	}
+
+	return
+}
+
+func readsVsRef(ref seqrecord.SeqRecord, records seqrecord.SeqRecords) (pairs []readPair) {
+	read1 := stripGaps(ref.Nucl)
+	for i := 0; i < len(records); i++ {
+		if records[i].Genome != ref.Genome {
+			read2 := stripRefGaps(ref.Nucl, records[i].Nucl)
+			pairs = append(pairs, readPair{read1, read2})
+		}
+	}
+
+	return
+}
+
+func genomeOne(records seqrecord.SeqRecords, g genome.Genome, maxl, pos int, c *Calculators, f readsVsFunc) {
+	refRecords := getRefRecords(records, g)
 	for _, ref := range refRecords {
 		// determine reference position profile.
 		prof := getProfile(ref, g)
 		if len(prof) < len(ref.Nucl)/2 {
-			log.Printf("%d\t%d\n", len(prof), len(ref.Nucl))
+			log.Printf("Discard sequence record:\n")
+			log.Printf("%s, %s, %v\n", ref.Id, ref.Genome, ref.Loc)
 			continue
 		}
 
-		// compare substituations according to the profile.
+		pairs := f(ref, records)
 		subMatrix := [][]float64{}
-		for j := 0; j < len(records); j++ {
-			read1 := stripRefGaps(ref.Nucl, records[j].Nucl)
-			for k := j + 1; k < len(records); k++ {
-				read2 := stripRefGaps(ref.Nucl, records[k].Nucl)
-				subs := SubProfile(read1, read2, prof, pos)
-				subMatrix = append(subMatrix, subs)
-			}
+		for _, pair := range pairs {
+			subs := SubProfile(pair.read1, pair.read2, prof, pos)
+			subMatrix = append(subMatrix, subs)
 		}
 		subMatrixCorr(subMatrix, maxl, c)
 	}
 }
 
+func GenomesVsGenomesOne(records seqrecord.SeqRecords, g genome.Genome, maxl, pos int, c *Calculators) {
+	f := readsVsReads
+	genomeOne(records, g, maxl, pos, c, f)
+}
+
 func GenomesVsGenomeOne(records seqrecord.SeqRecords, g genome.Genome, maxl, pos int, c *Calculators) {
-	acc := g.RefAcc()
-	refRecords := seqrecord.SeqRecords{}
-	for _, r := range records {
-		acc2 := genome.FindRefAcc(r.Genome)
-		if acc == acc2 {
-			refRecords = append(refRecords, r)
-		}
-	}
-
-	for _, ref := range refRecords {
-		nucl := stripGaps(ref.Nucl)
-		// determine reference position profile.
-		prof := getProfile(ref, g)
-		if len(prof) < len(ref.Nucl)/2 {
-			log.Printf("%d\t%d\n", len(prof), len(ref.Nucl))
-			continue
-		}
-
-		subMatrix := [][]float64{}
-		for _, r := range records {
-			if ref.Genome != r.Genome {
-				read := stripRefGaps(ref.Nucl, r.Nucl)
-				subs := SubProfile(read, nucl, prof, pos)
-				subMatrix = append(subMatrix, subs)
-			}
-		}
-		subMatrixCorr(subMatrix, maxl, c)
-	}
-
+	f := readsVsRef
+	genomeOne(records, g, maxl, pos, c, f)
 }
