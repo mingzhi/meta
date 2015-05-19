@@ -14,6 +14,11 @@ import (
 	"strings"
 )
 
+type fitControl struct {
+	name       string
+	start, end int
+}
+
 // Config to read flags and configure file.
 type cmdConfig struct {
 	// Flags.
@@ -51,8 +56,7 @@ type cmdConfig struct {
 	speciesMap  map[string][]strain.Strain // species: []strain map.
 
 	// Fit parameters.
-	fitStart, fitEnd int
-	fitRSquare       float64
+	fitControls []fitControl
 
 	// bootstrapping parameters.
 	numBoot int // number of bootstrapping
@@ -110,10 +114,16 @@ func (cmd *cmdConfig) ParseConfig() {
 	cmd.speciesFile = config.GetString("species.file")
 
 	// Fit range.
-	cmd.fitStart = config.GetInt("fit.start")
-	cmd.fitEnd = config.GetInt("fit.end")
-	cmd.fitRSquare = config.GetFloat64("fit.rsquare")
-	cmd.fitOutBase = config.GetString(("out.fit"))
+	expFitControl := fitControl{}
+	expFitControl.start = config.GetInt("fit.exp.start")
+	expFitControl.end = config.GetInt("fit.exp.end")
+	expFitControl.name = "exp"
+	cmd.fitControls = append(cmd.fitControls, expFitControl)
+	hyperFitControl := fitControl{}
+	hyperFitControl.start = config.GetInt("fit.hyper.start")
+	hyperFitControl.end = config.GetInt("fit.hyper.end")
+	hyperFitControl.name = "hyper"
+	cmd.fitControls = append(cmd.fitControls, hyperFitControl)
 
 	// Bootstrapping
 	cmd.numBoot = config.GetInt("bootstrapping.number")

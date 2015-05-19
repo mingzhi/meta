@@ -98,9 +98,26 @@ func (cmd *cmdFitGenomes) RunOne(strains []strain.Strain, pos int, name string, 
 					filePrefix := fmt.Sprintf("%s_%s_%s_pos%d", g.RefAcc(), funcType, name, pos)
 					filePath := filepath.Join(*cmd.workspace, cmd.covOutBase, s.Path, filePrefix+"_boot.json")
 					resChan := fromJson(filePath)
-					fitResChan := fitExp(resChan, cmd.fitStart, cmd.fitEnd)
-					fitFileOutPath := filepath.Join(*cmd.workspace, cmd.fitOutBase, s.Path, filePrefix+"_boot.json")
-					toJson(fitFileOutPath, fitResChan)
+					var f fitFunc
+					for _, fitCon := range cmd.fitControls {
+						if fitCon.end-fitCon.start > 0 {
+							name := fitCon.name
+							switch name {
+							case "exp":
+								f = fitExp
+							case "hyper":
+								f = fitHyper
+							default:
+								f = nil
+							}
+
+							if f != nil {
+								fitResChan := doFit(f, resChan, fitCon.start, fitCon.end)
+								fitFileOutPath := filepath.Join(*cmd.workspace, cmd.fitOutBase, s.Path, filePrefix+"_"+name+"_boot.json")
+								toJson(fitFileOutPath, fitResChan)
+							}
+						}
+					}
 				}
 			}
 			done <- true
@@ -117,7 +134,9 @@ type FitResult struct {
 	B0, B1, B2 float64
 }
 
-func fitExp(resChan chan CovResult, fitStart, fitEnd int) (fitResChan chan FitResult) {
+type fitFunc func(xdata, ydata []float64) FitResult
+
+func doFit(f fitFunc, resChan chan CovResult, fitStart, fitEnd int) (fitResChan chan FitResult) {
 	ncpu := runtime.GOMAXPROCS(0)
 	done := make(chan bool)
 	fitResChan = make(chan FitResult)
@@ -135,12 +154,7 @@ func fitExp(resChan chan CovResult, fitStart, fitEnd int) (fitResChan chan FitRe
 					}
 				}
 
-				par := fit.FitExp(xdata, ydata)
-				fr.B0 = par[0]
-				fr.B1 = par[1]
-				fr.B2 = par[2]
-
-				fitResChan <- fr
+				fitResChan <- f(xdata, ydata)
 			}
 			done <- true
 		}()
@@ -153,6 +167,21 @@ func fitExp(resChan chan CovResult, fitStart, fitEnd int) (fitResChan chan FitRe
 		}
 	}()
 
+	return
+}
+
+func fitHyper(xdata, ydata []float64) (res FitResult) {
+	par := fit.FitHyper(xdata, ydata)
+	res.B0 = par[0]
+	res.B1 = par[1]
+	return
+}
+
+func fitExp(xdata, ydata []float64) (res FitResult) {
+	par := fit.FitExp(xdata, ydata)
+	res.B0 = par[0]
+	res.B1 = par[1]
+	res.B2 = par[2]
 	return
 }
 
