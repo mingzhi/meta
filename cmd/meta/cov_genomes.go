@@ -8,7 +8,9 @@ import (
 	"github.com/mingzhi/meta/genome"
 	"github.com/mingzhi/meta/strain"
 	"github.com/mingzhi/ncbiftp/seqrecord"
+	"log"
 	"math"
+	"math/rand"
 	"os"
 	"path/filepath"
 )
@@ -106,8 +108,9 @@ func (cmd *cmdCovGenomes) RunOne(strains []strain.Strain, alignments []seqrecord
 		}
 	}()
 
+	ncpu := *cmd.ncpu
 	done := make(chan bool)
-	for i := 0; i < *cmd.ncpu; i++ {
+	for i := 0; i < ncpu; i++ {
 		go func() {
 			for job := range jobs {
 				s := job.strain
@@ -129,7 +132,8 @@ func (cmd *cmdCovGenomes) RunOne(strains []strain.Strain, alignments []seqrecord
 
 				for j, covGenomesFunc := range covGenomesFuncs {
 					funcType := covGenomesFuncNames[j]
-					res := cmd.Cov(alignments, g, pos, covGenomesFunc)
+					cc := cov.GenomesCalc(alignments, g, cmd.maxl, pos, covGenomesFunc)
+					res := createCovResult(cc, cmd.maxl, pos)
 					// Write result to files.
 					filePrefix := fmt.Sprintf("%s_%s_%s_pos%d", g.RefAcc(),
 						funcType, name, pos)
@@ -142,17 +146,24 @@ func (cmd *cmdCovGenomes) RunOne(strains []strain.Strain, alignments []seqrecord
 					}
 
 					if cmd.numBoot > 0 {
-						results := cmd.covBoot(alignments, g, pos, covGenomesFunc)
+						ccChan := cmd.boot(cc, cmd.numBoot)
+						resChan := cmd.collectBoot(ccChan, pos, cmd.maxl)
 						// Write result to files.
 						filePath := filepath.Join(*cmd.workspace, cmd.covOutBase, s.Path,
 							filePrefix+"_boot.json")
-						selected := []CovResult{}
-						for _, res := range results {
+						w, err := os.Create(filePath)
+						if err != nil {
+							log.Panicln(err)
+						}
+						defer w.Close()
+						encoder := json.NewEncoder(w)
+						for res := range resChan {
 							if !math.IsNaN(res.VarKs) {
-								selected = append(selected, res)
+								if err := encoder.Encode(res); err != nil {
+									log.Panicln(err)
+								}
 							}
 						}
-						save2Jsons(selected, filePath)
 					}
 				}
 
@@ -162,7 +173,7 @@ func (cmd *cmdCovGenomes) RunOne(strains []strain.Strain, alignments []seqrecord
 	}
 
 	// Waiting for the job done.
-	for i := 0; i < *cmd.ncpu; i++ {
+	for i := 0; i < ncpu; i++ {
 		<-done
 	}
 }
@@ -188,22 +199,53 @@ func (cmd *cmdCovGenomes) ReadAlignments(prefix string) (alns []seqrecord.SeqRec
 	return
 }
 
-// Calculate covariances for records.
-func (cmd *cmdCovGenomes) Cov(records []seqrecord.SeqRecords, g genome.Genome, pos int, covFunc cov.GenomesOneFunc) (res CovResult) {
-	cc := cov.GenomesCalc(records, g, cmd.maxl, pos, covFunc)
-	maxl := cmd.maxl
-	res = createCovResult(cc, maxl, pos)
+func (cmd *cmdCovGenomes) boot(cc []*cov.Calculators, numBoot int) (ccChan chan []*cov.Calculators) {
+	// bootstrapping
+	bootJobs := make(chan []int)
+	go func() {
+		defer close(bootJobs)
+		for i := 0; i < numBoot; i++ {
+			sample := make([]int, len(cc))
+			for j := 0; j < len(sample); j++ {
+				sample[j] = rand.Intn(len(cc))
+			}
+			bootJobs <- sample
+		}
+	}()
+
+	ccChan = make(chan []*cov.Calculators)
+	ncpu := *cmd.ncpu
+	done := make(chan bool)
+	for i := 0; i < ncpu; i++ {
+		go func() {
+			for sample := range bootJobs {
+				randomCC := []*cov.Calculators{}
+				for j := 0; j < len(sample); j++ {
+					index := sample[j]
+					c := cc[index]
+					randomCC = append(randomCC, c)
+				}
+				ccChan <- randomCC
+			}
+			done <- true
+		}()
+	}
+
+	go func() {
+		defer close(ccChan)
+		for i := 0; i < ncpu; i++ {
+			<-done
+		}
+	}()
+
 	return
 }
 
-func (cmd *cmdCovGenomes) covBoot(records []seqrecord.SeqRecords, g genome.Genome, pos int, covFunc cov.GenomesOneFunc) (results []CovResult) {
-	maxl := cmd.maxl
-	ccChan := cov.GenomesBoot(records, g, maxl, pos, cmd.numBoot, covFunc)
-	ncpu := *cmd.ncpu
-
-	resChan := make(chan CovResult)
+func (cmd *cmdCovGenomes) collectBoot(ccChan chan []*cov.Calculators, pos, maxl int) (resChan chan CovResult) {
+	resChan = make(chan CovResult)
+	numWorker := *cmd.ncpu
 	done := make(chan bool)
-	for i := 0; i < ncpu; i++ {
+	for i := 0; i < numWorker; i++ {
 		go func() {
 			for cc := range ccChan {
 				res := createCovResult(cc, maxl, pos)
@@ -215,14 +257,10 @@ func (cmd *cmdCovGenomes) covBoot(records []seqrecord.SeqRecords, g genome.Genom
 
 	go func() {
 		defer close(resChan)
-		for i := 0; i < ncpu; i++ {
+		for i := 0; i < numWorker; i++ {
 			<-done
 		}
 	}()
-
-	for res := range resChan {
-		results = append(results, res)
-	}
 
 	return
 }

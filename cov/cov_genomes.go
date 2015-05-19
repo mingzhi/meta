@@ -5,7 +5,6 @@ import (
 	"github.com/mingzhi/meta/genome"
 	"github.com/mingzhi/ncbiftp/seqrecord"
 	"log"
-	"math/rand"
 	"runtime"
 )
 
@@ -13,50 +12,6 @@ type GenomesOneFunc func(records seqrecord.SeqRecords, g genome.Genome, maxl, po
 
 func GenomesCalc(alignments []seqrecord.SeqRecords, g genome.Genome, maxl, pos int, oneFunc GenomesOneFunc) []*Calculators {
 	return genomeCalc(alignments, g, maxl, pos, oneFunc)
-}
-
-func GenomesBoot(alignments []seqrecord.SeqRecords, g genome.Genome, maxl, pos, numBoot int, oneFunc GenomesOneFunc) <-chan []*Calculators {
-	results := genomeCalc(alignments, g, maxl, pos, oneFunc)
-
-	// bootstrapping
-	bootJobs := make(chan []int)
-	go func() {
-		defer close(bootJobs)
-		for i := 0; i < numBoot; i++ {
-			sample := make([]int, len(results))
-			for j := 0; j < len(sample); j++ {
-				sample[j] = rand.Intn(len(results))
-			}
-			bootJobs <- sample
-		}
-	}()
-
-	ncpu := runtime.GOMAXPROCS(0)
-	bootResultChan := make(chan []*Calculators)
-	done := make(chan bool)
-	for i := 0; i < ncpu; i++ {
-		go func() {
-			for sample := range bootJobs {
-				bootResults := []*Calculators{}
-				for j := 0; j < len(sample); j++ {
-					index := sample[j]
-					res := results[index]
-					bootResults = append(bootResults, res)
-				}
-				bootResultChan <- bootResults
-			}
-			done <- true
-		}()
-	}
-
-	go func() {
-		defer close(bootResultChan)
-		for i := 0; i < ncpu; i++ {
-			<-done
-		}
-	}()
-
-	return bootResultChan
 }
 
 func genomeCalc(alignments []seqrecord.SeqRecords, g genome.Genome, maxl, pos int, oneFunc GenomesOneFunc) []*Calculators {
