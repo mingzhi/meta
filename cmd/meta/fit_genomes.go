@@ -97,7 +97,6 @@ func (cmd *cmdFitGenomes) RunOne(strains []strain.Strain, pos int, name string, 
 				for _, g := range s.Genomes {
 					filePrefix := fmt.Sprintf("%s_%s_%s_pos%d", g.RefAcc(), funcType, name, pos)
 					filePath := filepath.Join(*cmd.workspace, cmd.covOutBase, s.Path, filePrefix+"_boot.json")
-					resChan := fromJson(filePath)
 					var f fitFunc
 					for _, fitCon := range cmd.fitControls {
 						if fitCon.end-fitCon.start > 0 {
@@ -112,6 +111,7 @@ func (cmd *cmdFitGenomes) RunOne(strains []strain.Strain, pos int, name string, 
 							}
 
 							if f != nil {
+								resChan := fromJson(filePath)
 								fitResChan := doFit(f, resChan, fitCon.start, fitCon.end)
 								fitFileOutPath := filepath.Join(*cmd.workspace, cmd.fitOutBase, s.Path, filePrefix+"_"+name+"_boot.json")
 								toJson(fitFileOutPath, fitResChan)
