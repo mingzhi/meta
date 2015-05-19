@@ -27,7 +27,6 @@ func main() {
 	command.On("cov_genomes", "calculate correlation of subsitutions in genomes", &cmdCovGenomes{}, args)
 	command.On("bowtie2_index", "build bowtie2 index", &cmdIndex{}, []string{})
 	command.On("bowtie2_align", "align reads using bowtie2", &cmdAlignReads{}, args)
-	command.On("estimate", "estimate r/m", &cmdEstimate{}, args)
 	command.On("scaffold_merge", "merge scaffolds", &cmdScaffoldMerge{}, args)
 	command.On("genome_profile", "genome position profiling", &cmdGenomeProfile{}, args)
 	command.On("fit_genomes", "fit genome cov results", &cmdFitGenomes{}, args)
