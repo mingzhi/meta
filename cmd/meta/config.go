@@ -96,6 +96,7 @@ func (cmd *cmdConfig) ParseConfig() {
 	cmd.samOutBase = config.GetString("out.sam")
 	cmd.orthoOutBase = config.GetString("out.ortho")
 	cmd.plotOutBase = config.GetString("out.plot")
+	cmd.fitOutBase = config.GetString("out.fit")
 	// Parse options for covariance calculation.
 	cmd.maxl = config.GetInt("cov.maxl")
 	cmd.covReadsFuncs = config.GetStringSlice("cov.functions")
