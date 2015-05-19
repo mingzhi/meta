@@ -219,6 +219,8 @@ func fromJson(filePath string) (resChan chan CovResult) {
 					log.Panicln(err)
 				}
 				break
+			} else {
+				resChan <- res
 			}
 		}
 		f.Close()
