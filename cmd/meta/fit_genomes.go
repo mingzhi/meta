@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"github.com/mingzhi/meta/fit"
 	"github.com/mingzhi/meta/strain"
+	"io"
+	"log"
 	"math"
 	"os"
 	"path/filepath"
@@ -95,10 +97,10 @@ func (cmd *cmdFitGenomes) RunOne(strains []strain.Strain, pos int, name string, 
 				for _, g := range s.Genomes {
 					filePrefix := fmt.Sprintf("%s_%s_%s_pos%d", g.RefAcc(), funcType, name, pos)
 					filePath := filepath.Join(*cmd.workspace, cmd.covOutBase, s.Path, filePrefix+"_boot.json")
-					results := fromJson(filePath)
-					fitResults := fitExp(results, cmd.fitStart, cmd.fitEnd)
+					resChan := fromJson(filePath)
+					fitResChan := fitExp(resChan, cmd.fitStart, cmd.fitEnd)
 					fitFileOutPath := filepath.Join(*cmd.workspace, cmd.fitOutBase, s.Path, filePrefix+"_boot.json")
-					toJson(fitFileOutPath, fitResults)
+					toJson(fitFileOutPath, fitResChan)
 				}
 			}
 			done <- true
@@ -115,21 +117,13 @@ type FitResult struct {
 	B0, B1, B2 float64
 }
 
-func fitExp(results []CovResult, fitStart, fitEnd int) (fitResults []FitResult) {
-	jobs := make(chan CovResult)
-	go func() {
-		defer close(jobs)
-		for _, r := range results {
-			jobs <- r
-		}
-	}()
-
+func fitExp(resChan chan CovResult, fitStart, fitEnd int) (fitResChan chan FitResult) {
 	ncpu := runtime.GOMAXPROCS(0)
 	done := make(chan bool)
-	fitResChan := make(chan FitResult)
+	fitResChan = make(chan FitResult)
 	for i := 0; i < ncpu; i++ {
 		go func() {
-			for r := range jobs {
+			for r := range resChan {
 				fr := FitResult{}
 				fr.Ks = r.Ks
 				xdata := []float64{}
@@ -159,12 +153,6 @@ func fitExp(results []CovResult, fitStart, fitEnd int) (fitResults []FitResult) 
 		}
 	}()
 
-	for fr := range fitResChan {
-		if !isNaN(fr) {
-			fitResults = append(fitResults, fr)
-		}
-	}
-
 	return
 }
 
@@ -184,27 +172,43 @@ func isNaN(res FitResult) bool {
 	return false
 }
 
-func fromJson(filePath string) (results []CovResult) {
+func fromJson(filePath string) (resChan chan CovResult) {
 	f, err := os.Open(filePath)
 	if err != nil {
 		panic(err)
 	}
-	defer f.Close()
 
 	d := json.NewDecoder(f)
-	if err := d.Decode(&results); err != nil {
-		panic(err)
-	}
+
+	resChan = make(chan CovResult)
+	go func() {
+		defer close(resChan)
+		for {
+			res := CovResult{}
+			if err := d.Decode(&res); err != nil {
+				if err != io.EOF {
+					log.Panicln(err)
+				}
+				break
+			}
+		}
+		f.Close()
+	}()
 
 	return
 }
 
-func toJson(filePath string, fitResults []FitResult) {
+func toJson(filePath string, fitResChan chan FitResult) {
 	f, err := os.Create(filePath)
 	if err != nil {
 		panic(err)
 	}
 	defer f.Close()
+
+	fitResults := []FitResult{}
+	for res := range fitResChan {
+		fitResults = append(fitResults, res)
+	}
 
 	e := json.NewEncoder(f)
 	if err := e.Encode(fitResults); err != nil {

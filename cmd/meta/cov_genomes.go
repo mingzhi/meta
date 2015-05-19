@@ -108,7 +108,7 @@ func (cmd *cmdCovGenomes) RunOne(strains []strain.Strain, alignments []seqrecord
 		}
 	}()
 
-	ncpu := *cmd.ncpu
+	ncpu := 1
 	done := make(chan bool)
 	for i := 0; i < ncpu; i++ {
 		go func() {
