@@ -133,14 +133,19 @@ func fitExp(results []CovResult, fitStart, fitEnd int) (fitResults []FitResult) 
 				fr := FitResult{}
 				fr.Ks = r.Ks
 				xdata := []float64{}
-				for i := fitStart; i < fitEnd; i++ {
-					xdata = append(xdata, float64(r.CtIndices[i]))
+				ydata := []float64{}
+				for i := 0; i < len(r.CtIndices) && r.CtIndices[i] < fitEnd; i++ {
+					if r.CtIndices[i] >= fitStart {
+						xdata = append(xdata, float64(r.CtIndices[i]))
+						ydata = append(ydata, r.Ct[i])
+					}
 				}
-				ydata := r.Ct[fitStart:fitEnd]
+
 				par := fit.FitExp(xdata, ydata)
 				fr.B0 = par[0]
 				fr.B1 = par[1]
 				fr.B2 = par[2]
+
 				fitResChan <- fr
 			}
 			done <- true
