@@ -143,8 +143,6 @@ func doFit(f fitFunc, resChan chan CovResult, fitStart, fitEnd int) (fitResChan 
 	for i := 0; i < ncpu; i++ {
 		go func() {
 			for r := range resChan {
-				fr := FitResult{}
-				fr.Ks = r.Ks
 				xdata := []float64{}
 				ydata := []float64{}
 				for i := 0; i < len(r.CtIndices) && r.CtIndices[i] < fitEnd; i++ {
@@ -153,8 +151,9 @@ func doFit(f fitFunc, resChan chan CovResult, fitStart, fitEnd int) (fitResChan 
 						ydata = append(ydata, r.Ct[i])
 					}
 				}
-
-				fitResChan <- f(xdata, ydata)
+				res := f(xdata, ydata)
+				res.Ks = r.Ks
+				fitResChan <- res
 			}
 			done <- true
 		}()
