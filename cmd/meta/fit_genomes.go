@@ -153,7 +153,9 @@ func doFit(f fitFunc, resChan chan CovResult, fitStart, fitEnd int) (fitResChan 
 				}
 				res := f(xdata, ydata)
 				res.Ks = r.Ks
-				fitResChan <- res
+				if !isNaN(res) {
+					fitResChan <- res
+				}
 			}
 			done <- true
 		}()
