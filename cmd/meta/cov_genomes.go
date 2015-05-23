@@ -13,6 +13,7 @@ import (
 	"math/rand"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 // Command to calculate correlations of substituions
@@ -47,45 +48,65 @@ func (cmd *cmdCovGenomes) Run(args []string) {
 	// Initialize.
 	cmd.Init()
 
-	// For each species in the species map.
-	for prefix, strains := range cmd.speciesMap {
-		// Read alignments.
-		alignments := cmd.ReadAlignments(prefix)
-		INFO.Printf("Total number of alignments (pan-genome): %d\n", len(alignments))
-		var coreAlignments []seqrecord.SeqRecords // core genome
-		var dispAlignments []seqrecord.SeqRecords // dispensable genome
-		for _, aln := range alignments {
-			genomeSet := make(map[string]bool)
-			for _, rec := range aln {
-				genomeSet[rec.Genome] = true
-			}
-
-			if len(genomeSet) == len(strains) {
-				coreAlignments = append(coreAlignments, aln)
-			} else if len(genomeSet) < len(strains) {
-				dispAlignments = append(dispAlignments, aln)
-			}
-		}
-
-		INFO.Printf("Core alignments %d, Dispensable alignments %d\n", len(coreAlignments), len(dispAlignments))
-
-		alignmentTypes := []string{"core", "disp", "pan"}
-		alignmentArray := [][]seqrecord.SeqRecords{coreAlignments, dispAlignments, alignments}
-		for i := 0; i < len(alignmentTypes); i++ {
-			name := alignmentTypes[i]
-			alns := alignmentArray[i]
-			if len(alns) == 0 {
-				WARN.Printf("%s, %s alignments has zero record.\n", prefix, name)
-			}
-
-			// For each position, do the calculation.
-			for _, pos := range cmd.positions {
-				cmd.RunOne(strains, alns, pos, name)
-			}
-		}
-
+	type job struct {
+		strains    []strain.Strain
+		alignments []seqrecord.SeqRecords
+		position   int
+		name       string
 	}
 
+	jobChan := make(chan job)
+	go func() {
+		defer close(jobChan)
+		for prefix, strains := range cmd.speciesMap {
+			for _, pos := range cmd.positions {
+				p := prefix
+				if pos == 0 {
+					appendix := "expanded"
+					p = strings.Join([]string{prefix, appendix}, "_")
+				}
+				alignments := cmd.ReadAlignments(p)
+				cores, disps := separeteAlignments(alignments, strains)
+				alignmentTypes := []string{"core", "disp", "pan"}
+				alignmentArray := [][]seqrecord.SeqRecords{cores, disps, alignments}
+				for i := 0; i < len(alignmentTypes); i++ {
+					name := alignmentTypes[i]
+					alns := alignmentArray[i]
+					if len(alns) == 0 {
+						WARN.Printf("%s, %s alignments has zero record.\n", prefix, name)
+					} else {
+						j := job{}
+						j.alignments = alns
+						j.name = name
+						j.position = pos
+						j.strains = strains
+						jobChan <- j
+					}
+				}
+			}
+		}
+	}()
+
+	for j := range jobChan {
+		cmd.RunOne(j.strains, j.alignments, j.position, j.name)
+	}
+}
+
+func separeteAlignments(alignments []seqrecord.SeqRecords, strains []strain.Strain) (cores, disps []seqrecord.SeqRecords) {
+	for _, aln := range alignments {
+		genomeSet := make(map[string]bool)
+		for _, rec := range aln {
+			genomeSet[rec.Genome] = true
+		}
+
+		if len(genomeSet) == len(strains) {
+			cores = append(cores, aln)
+		} else if len(genomeSet) < len(strains) {
+			disps = append(disps, aln)
+		}
+	}
+
+	return
 }
 
 func (cmd *cmdCovGenomes) RunOne(strains []strain.Strain, alignments []seqrecord.SeqRecords, pos int, name string) {
