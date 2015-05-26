@@ -1,6 +1,7 @@
 package main
 
 import (
+	"compress/zlib"
 	"encoding/json"
 	"fmt"
 	"github.com/mingzhi/meta/fit"
@@ -208,7 +209,12 @@ func fromJson(filePath string) (resChan chan CovResult) {
 		panic(err)
 	}
 
-	d := json.NewDecoder(f)
+	r, err := zlib.NewReader(f)
+	if err != nil {
+		log.Panicln(err)
+	}
+
+	d := json.NewDecoder(r)
 
 	resChan = make(chan CovResult)
 	go func() {
@@ -224,6 +230,7 @@ func fromJson(filePath string) (resChan chan CovResult) {
 				resChan <- res
 			}
 		}
+		r.Close()
 		f.Close()
 	}()
 

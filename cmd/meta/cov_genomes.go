@@ -1,6 +1,7 @@
 package main
 
 import (
+	"compress/zlib"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -171,12 +172,16 @@ func (cmd *cmdCovGenomes) RunOne(strains []strain.Strain, alignments []seqrecord
 						resChan := cmd.collectBoot(ccChan, pos, cmd.maxl)
 						// Write result to files.
 						filePath := filepath.Join(*cmd.workspace, cmd.covOutBase, s.Path,
-							filePrefix+"_boot.json")
-						w, err := os.Create(filePath)
+							filePrefix+"_boot.json.zip")
+						f, err := os.Create(filePath)
 						if err != nil {
 							log.Panicln(err)
 						}
+						defer f.Close()
+
+						w := zlib.NewWriter(f)
 						defer w.Close()
+
 						encoder := json.NewEncoder(w)
 						for res := range resChan {
 							if !math.IsNaN(res.VarKs) {
