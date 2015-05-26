@@ -97,7 +97,7 @@ func (cmd *cmdFitGenomes) RunOne(strains []strain.Strain, pos int, name string, 
 				MakeDir(filepath.Join(*cmd.workspace, cmd.fitOutBase, s.Path))
 				for _, g := range s.Genomes {
 					filePrefix := fmt.Sprintf("%s_%s_%s_pos%d", g.RefAcc(), funcType, name, pos)
-					filePath := filepath.Join(*cmd.workspace, cmd.covOutBase, s.Path, filePrefix+"_boot.json")
+					filePath := filepath.Join(*cmd.workspace, cmd.covOutBase, s.Path, filePrefix+"_boot.json.zip")
 					var f fitFunc
 					for _, fitCon := range cmd.fitControls {
 						if fitCon.end-fitCon.start > 0 {
