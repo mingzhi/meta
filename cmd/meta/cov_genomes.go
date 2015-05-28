@@ -1,7 +1,7 @@
 package main
 
 import (
-	"compress/zlib"
+	"compress/flate"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -179,7 +179,7 @@ func (cmd *cmdCovGenomes) RunOne(strains []strain.Strain, alignments []seqrecord
 						}
 						defer f.Close()
 
-						w := zlib.NewWriter(f)
+						w, _ := flate.NewWriter(f, flate.BestCompression)
 						defer w.Close()
 
 						encoder := json.NewEncoder(w)
