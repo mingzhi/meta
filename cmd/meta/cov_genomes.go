@@ -181,6 +181,7 @@ func (cmd *cmdCovGenomes) RunOne(strains []strain.Strain, alignments []seqrecord
 
 						w, _ := flate.NewWriter(f, flate.BestCompression)
 						defer w.Close()
+						defer w.Flush()
 
 						encoder := json.NewEncoder(w)
 						for res := range resChan {

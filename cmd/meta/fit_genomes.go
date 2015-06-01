@@ -223,7 +223,7 @@ func fromJson(filePath string) (resChan chan CovResult) {
 			res := CovResult{}
 			if err := d.Decode(&res); err != nil {
 				if err != io.EOF {
-					log.Panicln(err)
+					log.Println(err)
 				}
 				break
 			} else {
