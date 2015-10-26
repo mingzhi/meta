@@ -66,6 +66,8 @@ func (cmd *cmdInit) Run(args []string) {
 				if strings.Contains(strings.ToLower(s.Status), "complete") {
 					speciesMap[s.Species] = append(speciesMap[s.Species], s)
 				}
+			} else {
+				speciesMap[s.Species] = append(speciesMap[s.Species], s)
 			}
 		}
 	}

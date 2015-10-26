@@ -36,22 +36,17 @@ func (cmd *cmdAlignReads) Run(args []string) {
 		}
 	}()
 
-	// Create cmd.ncpu workers for aligning.
-	// send done signal when the job is done.
+	// Channeling the jobs.
 	done := make(chan bool)
-	for i := 0; i < *cmd.ncpu; i++ {
-		go func() {
-			for strain := range jobs {
-				cmd.align(strain)
-			}
-			done <- true
-		}()
-	}
+	go func() {
+		for strain := range jobs {
+			cmd.align(strain)
+		}
+		done <- true
+	}()
 
-	// Waiting for workers.
-	for i := 0; i < *cmd.ncpu; i++ {
-		<-done
-	}
+	// Waiting
+	<-done
 }
 
 // bowie2 options:
@@ -101,6 +96,7 @@ func (cmd *cmdAlignReads) align(strain strain.Strain) {
 		genomeIndexBase := filepath.Join(cmd.refBase, strain.Path, g.RefAcc())
 		outFilePrefix := filepath.Join(outPath, g.RefAcc())
 		samOutFilePath := outFilePrefix + bowtiedSamAppendix
+		options = append(options, []string{"-p", *cmd.ncpu})
 		options = append(options, []string{"-x", genomeIndexBase}...)
 		options = append(options, []string{"-1", cmd.pairedEndReadFile1}...)
 		options = append(options, []string{"-2", cmd.pairedEndReadFile2}...)
@@ -132,5 +128,4 @@ func (cmd *cmdAlignReads) align(strain strain.Strain) {
 			ERROR.Println(err)
 		}
 	}
-
 }
