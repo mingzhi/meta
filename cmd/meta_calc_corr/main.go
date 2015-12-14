@@ -1,3 +1,8 @@
+// This program calculate rate correlations (c_R) and structure correlation (c_R),
+// from a mapping results of metagenomic sequences to a reference genome.
+// We need two inputs:
+// 1. the mapping results in .bam format;
+// 2. the reference genome sequence and the protein features.
 package main
 
 import (
@@ -8,31 +13,43 @@ import (
 )
 
 var (
-	bamFileName  string
-	genomeAcc    string
-	outFile      string
-	maxl         int
-	codonTableId string
+	bamFileName        string // mapping results in .bam file
+	genomeFile         string // genome accession number
+	proteinFeatureFile string // protein feature file
+	outFile            string
+	maxl               int
+	codonTableId       string
+	pos                int // position for calculation.
 )
 
 func init() {
 	flag.StringVar(&codonTableId, "codon", "11", "codon table id")
 	flag.IntVar(&maxl, "maxl", 500, "maxl")
+	flag.IntVar(&pos, "pos", 4, "position for SNP calculation.")
 	flag.Parse()
+	if flag.NArg() < 4 {
+		fmt.Println("meta_calc_corr <bam file> <ref genome sequence> <protein feature file> <output file>")
+		os.Exit(1)
+	}
 	bamFileName = flag.Arg(0)
-	genomeAcc = flag.Arg(1)
-	outFile = flag.Arg(2)
+	genomeFile = flag.Arg(1)
+	proteinFeatureFile = flag.Arg(2)
+	outFile = flag.Arg(3)
 }
 
 func main() {
+	// Obtain codon table for following genome profiling.
 	codonTable := taxonomy.GeneticCodes()[codonTableId]
-	genomeFile := genomeAcc + ".fna"
-	pttFile := genomeAcc + ".ptt"
-	profile := ProfileGenome(genomeFile, pttFile, codonTable)
-	fmt.Println("Finish generating profile!")
+	// Profiling genome using reference sequence and protein feature data.
+	profile := ProfileGenome(genomeFile, proteinFeatureFile, codonTable)
+
+	// Read mapping records in sam formate from the .bam file.
 	_, samRecordChan := ReadBamFile(bamFileName)
+	// Pileup the mapped bases for each genomic position.
 	snpChan := Pileup(samRecordChan)
-	c := Calc(snpChan, profile, FourFold, maxl)
+	// Using the pileup data for correlation calculation.
+	c := Calc(snpChan, profile, convertPos(pos), maxl)
+	// Collect results from the calculator.
 	means, covs := Collect(c)
 
 	w, err := os.Create(outFile)
@@ -44,4 +61,20 @@ func main() {
 	for i := 0; i < len(means); i++ {
 		w.WriteString(fmt.Sprintf("%d\t%g\t%g\n", i, means[i], covs[i]))
 	}
+}
+
+func convertPos(pos int) byte {
+	var p byte
+	switch pos {
+	case 1:
+		p = FirstPos
+	case 2:
+		p = SecondPos
+	case 3:
+		p = ThirdPos
+	case 4:
+		p = FourFold
+	}
+
+	return p
 }

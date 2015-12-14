@@ -4,7 +4,7 @@ import (
 	"github.com/biogo/hts/sam"
 )
 
-// A BASE structure
+// BASE structure
 type Base struct {
 	Pos    int   // position it mapped to the reference genome.
 	Base   byte  // the base pair.
@@ -12,16 +12,18 @@ type Base struct {
 	ReadId int64 // the read id.
 }
 
+// Create sort interface
 type Bases []*Base
 
 func (b Bases) Len() int      { return len(b) }
 func (b Bases) Swap(i, j int) { b[i], b[j] = b[j], b[i] }
 
+// Sort by the read ID.
 type ByReadId struct{ Bases }
 
 func (b ByReadId) Less(i, j int) bool { return b.Bases[i].ReadId < b.Bases[j].ReadId }
 
-// A SNP structure
+// SNP structure
 type SNP struct {
 	Pos   int     // the position where it mapped to the reference genome.
 	Bases []*Base // the mapped base pairs.
