@@ -91,10 +91,10 @@ func (c *Calculator) Calc(s1, s2 *SNP) {
 			c.Cr.Increment(l, x, y)
 		}
 
-		cov := covSNPs(s1, s2)
-		if cov.GetN() > 10 && !math.IsNaN(cov.GetResult()) {
-			c.Cs.Increment(l, cov.GetResult())
-		}
+		// cov := covSNPs(s1, s2)
+		// if cov.GetN() > 10 && !math.IsNaN(cov.GetResult()) {
+		// 	c.Cs.Increment(l, cov.GetResult())
+		// }
 	}
 }
 
@@ -197,56 +197,82 @@ func covSNPs(s1, s2 *SNP) (c *correlation.BivariateCovariance) {
 	return c
 }
 
-func Calc(snpChan chan *SNP, profile []byte, t byte, maxl int) (c *Calculator) {
-	c = NewCalculator(maxl)
+func Calc(snpChan chan *SNP, profile []byte, t byte, maxl, geneLength int) (cChan chan *Calculator) {
+
 	storage := []*SNP{}
-	for snp := range snpChan {
-		if len(storage) < maxl {
-			storage = append(storage, snp)
-		} else {
-			s1 := storage[0]
+
+	cChan = make(chan *Calculator)
+
+	go func() {
+		defer close(cChan)
+
+		totalLength := geneLength
+		var c *Calculator
+		c = NewCalculator(maxl)
+		for snp := range snpChan {
+			if snp.Pos >= totalLength {
+				cChan <- c
+				c = NewCalculator(maxl)
+				totalLength += geneLength
+				println(totalLength)
+			}
+
+			if len(storage) < maxl {
+				storage = append(storage, snp)
+			} else {
+				s1 := storage[0]
+				if profile[s1.Pos] == t {
+					for i := 1; i < len(storage); i++ {
+						s2 := storage[i]
+						if profile[s2.Pos] == t {
+							c.Calc(s1, s2)
+						}
+					}
+				}
+				storage = storage[1:]
+			}
+		}
+
+		for i := 0; i < len(storage); i++ {
+			s1 := storage[i]
 			if profile[s1.Pos] == t {
-				for i := 1; i < len(storage); i++ {
-					s2 := storage[i]
+				for j := i + 1; j < len(storage); j++ {
+					s2 := storage[j]
 					if profile[s2.Pos] == t {
 						c.Calc(s1, s2)
 					}
 				}
 			}
-			storage = storage[1:]
-		}
-	}
 
-	for i := 0; i < len(storage); i++ {
-		s1 := storage[i]
-		if profile[s1.Pos] == t {
-			for j := i + 1; j < len(storage); j++ {
-				s2 := storage[j]
-				if profile[s2.Pos] == t {
-					c.Calc(s1, s2)
-				}
-			}
 		}
 
-	}
+		cChan <- c
+	}()
 
 	return
 }
 
-func Collect(c *Calculator) (means, covs []float64) {
-	cr := c.Cr
-	for i := 0; i < c.MaxL; i++ {
-		v := cr.GetResult(i)
-		if !math.IsNaN(v) {
-			covs = append(covs, v)
-		}
+func Collect(maxl int, cChan chan *Calculator) (means, covs []*meanvar.MeanVar) {
+	for i := 0; i < maxl; i++ {
+		means = append(means, meanvar.New())
+		covs = append(covs, meanvar.New())
 	}
 
-	cs := c.Cs
-	for i := 0; i < c.MaxL; i++ {
-		v := cs.GetMean(i)
-		if !math.IsNaN(v) {
-			means = append(means, v)
+	for c := range cChan {
+		cr := c.Cr
+		for i := 0; i < c.MaxL; i++ {
+			v := cr.GetResult(i)
+			if !math.IsNaN(v) {
+				covs[i].Increment(v)
+			}
+		}
+
+		cs := c.Cs
+		for i := 0; i < c.MaxL; i++ {
+			v := cs.GetMean(i)
+			if !math.IsNaN(v) {
+				means[i].Increment(v)
+			}
 		}
 	}
 

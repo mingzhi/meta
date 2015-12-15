@@ -48,9 +48,10 @@ func main() {
 	// Pileup the mapped bases for each genomic position.
 	snpChan := Pileup(samRecordChan)
 	// Using the pileup data for correlation calculation.
-	c := Calc(snpChan, profile, convertPos(pos), maxl)
+	geneLength := len(profile) / 1000
+	cChan := Calc(snpChan, profile, convertPos(pos), maxl, geneLength)
 	// Collect results from the calculator.
-	means, covs := Collect(c)
+	means, covs := Collect(maxl, cChan)
 
 	w, err := os.Create(outFile)
 	if err != nil {
@@ -59,7 +60,8 @@ func main() {
 	defer w.Close()
 
 	for i := 0; i < len(means); i++ {
-		w.WriteString(fmt.Sprintf("%d\t%g\t%g\n", i, means[i], covs[i]))
+		w.WriteString(fmt.Sprintf("%d\t%g\t%g\t%d\t%g\t%g\t%d\n", i, means[i].Mean.GetResult(), means[i].Var.GetResult(), means[i].Mean.GetN(),
+			covs[i].Mean.GetResult(), covs[i].Var.GetResult(), covs[i].Mean.GetN()))
 	}
 }
 
