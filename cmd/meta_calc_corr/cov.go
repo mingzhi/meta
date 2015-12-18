@@ -63,10 +63,40 @@ func (m *MeanCovCalculator) GetN(l int) int {
 	return m.meanvars[l].Mean.GetN()
 }
 
+type KsCalculator struct {
+	mean     *desc.Mean
+	variance *desc.Variance
+}
+
+func NewKsCalculator() *KsCalculator {
+	ks := KsCalculator{}
+	ks.mean = desc.NewMean()
+	ks.variance = desc.NewVariance()
+	return &ks
+}
+
+func (k *KsCalculator) Increment(f float64) {
+	k.mean.Increment(f)
+	k.variance.Increment(f)
+}
+
+func (k *KsCalculator) GetMean() float64 {
+	return k.mean.GetResult()
+}
+
+func (k *KsCalculator) GetVariance() float64 {
+	return k.variance.GetResult()
+}
+
+func (k *KsCalculator) GetN() int {
+	return k.mean.GetN()
+}
+
 type Calculator struct {
 	MaxL int
 	Cs   *MeanCovCalculator
 	Cr   *CovCalculator
+	Ks   *KsCalculator
 }
 
 func NewCalculator(maxl int) *Calculator {
@@ -75,6 +105,7 @@ func NewCalculator(maxl int) *Calculator {
 	bias := false
 	c.Cs = NewMeanCovCalculator(maxl)
 	c.Cr = NewCovCalculator(maxl, bias)
+	c.Ks = NewKsCalculator()
 	return &c
 }
 
@@ -89,12 +120,13 @@ func (c *Calculator) Calc(s1, s2 *SNP) {
 		y, ny := calcPi(s2.Bases)
 		if nx > 10 && ny > 10 {
 			c.Cr.Increment(l, x, y)
+			cov := covSNPs(s1, s2)
+			if cov.GetN() > 10 {
+				c.Cs.Increment(l, cov.GetResult())
+			}
+			c.Ks.Increment(x)
+			c.Ks.Increment(y)
 		}
-
-		// cov := covSNPs(s1, s2)
-		// if cov.GetN() > 10 && !math.IsNaN(cov.GetResult()) {
-		// 	c.Cs.Increment(l, cov.GetResult())
-		// }
 	}
 }
 
@@ -252,11 +284,15 @@ func Calc(snpChan chan *SNP, profile []byte, t byte, maxl, geneLength int) (cCha
 	return
 }
 
-func Collect(maxl int, cChan chan *Calculator) (means, covs []*meanvar.MeanVar) {
+func Collect(maxl int, cChan chan *Calculator) (means, covs, ks []*meanvar.MeanVar) {
 	for i := 0; i < maxl; i++ {
 		means = append(means, meanvar.New())
 		covs = append(covs, meanvar.New())
 	}
+
+	ks = make([]*meanvar.MeanVar, 2)
+	ks[0] = meanvar.New()
+	ks[1] = meanvar.New()
 
 	for c := range cChan {
 		cr := c.Cr
@@ -273,6 +309,13 @@ func Collect(maxl int, cChan chan *Calculator) (means, covs []*meanvar.MeanVar) 
 			if !math.IsNaN(v) {
 				means[i].Increment(v)
 			}
+		}
+
+		ksm := c.Ks.GetMean()
+		ksv := c.Ks.GetVariance()
+		if !math.IsNaN(ksv) {
+			ks[0].Increment(ksm)
+			ks[1].Increment(ksv)
 		}
 	}
 
