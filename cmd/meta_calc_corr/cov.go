@@ -6,7 +6,6 @@ import (
 	"github.com/mingzhi/gomath/stat/desc"
 	"github.com/mingzhi/gomath/stat/desc/meanvar"
 	"math"
-	"sort"
 )
 
 type CovCalculator struct {
@@ -118,10 +117,10 @@ func (c *Calculator) Calc(s1, s2 *SNP) {
 	if l < c.MaxL {
 		x, nx := calcPi(s1.Bases)
 		y, ny := calcPi(s2.Bases)
-		if nx > 10 && ny > 10 {
+		if nx > minDepth && ny > minDepth {
 			c.Cr.Increment(l, x, y)
 			cov := covSNPs(s1, s2)
-			if cov.GetN() > 10 {
+			if cov.GetN() > minDepth {
 				c.Cs.Increment(l, cov.GetResult())
 			}
 			c.Ks.Increment(x)
@@ -166,37 +165,21 @@ type BasePair struct {
 	A, B *Base
 }
 
-func pairing(s1, s2 *SNP) (pairs []BasePair) {
-	b1 := s1.Bases
-	b2 := s2.Bases
-	sort.Sort(ByReadId{b1})
-	sort.Sort(ByReadId{b2})
+func pairBases(s1, s2 *SNP) (pairs []BasePair) {
+	m := make(map[string]*Base)
+	for i := 0; i < len(s1.Bases); i++ {
+		b := s1.Bases[i]
+		m[b.ReadId] = b
+	}
 
-	i := 0
-	j := 0
-	for {
-		if i >= len(b1) || j >= len(b2) {
-			break
-		}
-
-		a := b1[i]
-		b := b2[j]
-		if a.ReadId == b.ReadId {
-			if a.Pos > b.Pos {
-				a, b = b, a
+	for i := 0; i < len(s2.Bases); i++ {
+		b2 := s2.Bases[i]
+		b1, found := m[b2.ReadId]
+		if found {
+			if b1.Pos > b2.Pos {
+				b1, b2 = b2, b1
 			}
-
-			if a.Base != '*' && b.Base != '*' {
-				pairs = append(pairs, BasePair{A: a, B: b})
-			}
-			i++
-			j++
-		} else {
-			if a.ReadId > b.ReadId {
-				j++
-			} else {
-				i++
-			}
+			pairs = append(pairs, BasePair{b1, b2})
 		}
 	}
 
@@ -205,7 +188,7 @@ func pairing(s1, s2 *SNP) (pairs []BasePair) {
 
 func covSNPs(s1, s2 *SNP) (c *correlation.BivariateCovariance) {
 	c = correlation.NewBivariateCovariance(false)
-	pairs := pairing(s1, s2)
+	pairs := pairBases(s1, s2)
 	for i := 0; i < len(pairs); i++ {
 		p1 := pairs[i]
 		for j := i + 1; j < len(pairs); j++ {
@@ -246,12 +229,11 @@ func Calc(snpChan chan *SNP, profile []byte, t byte, maxl, geneLength int) (cCha
 				cChan <- c
 				c = NewCalculator(maxl)
 				totalLength += geneLength
-				println(totalLength)
 			}
 
-			if len(storage) < maxl {
-				storage = append(storage, snp)
-			} else {
+			storage = append(storage, snp)
+
+			if len(storage) > maxl {
 				s1 := storage[0]
 				if profile[s1.Pos] == t {
 					for i := 1; i < len(storage); i++ {

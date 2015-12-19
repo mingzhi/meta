@@ -20,12 +20,16 @@ var (
 	maxl               int
 	codonTableId       string
 	pos                int // position for calculation.
+	minBQ              int
+	minDepth           int
 )
 
 func init() {
-	flag.StringVar(&codonTableId, "codon", "11", "codon table id")
-	flag.IntVar(&maxl, "maxl", 500, "maxl")
-	flag.IntVar(&pos, "pos", 4, "position for SNP calculation.")
+	flag.StringVar(&codonTableId, "codon", "11", "Codon table id")
+	flag.IntVar(&maxl, "maxl", 500, "Maximum length of correlation distance")
+	flag.IntVar(&pos, "pos", 4, "Position for SNP calculation")
+	flag.IntVar(&minBQ, "min-BQ", 30, "Minimum base quality for a base to be considered")
+	flag.IntVar(&minDepth, "min-depth", 10, "At a position, mimimum number of reads included to calculation")
 	flag.Parse()
 	if flag.NArg() < 4 {
 		fmt.Println("meta_calc_corr <bam file> <ref genome sequence> <protein feature file> <output file>")
