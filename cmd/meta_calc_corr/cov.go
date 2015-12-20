@@ -137,9 +137,11 @@ func calcPi(bases []*Base) (pi float64, n int) {
 	// convert bases to upper case.
 	upperBases := bytes.ToUpper(bs)
 
-	mean := desc.NewMean()
+	numSkipped := 0
+	totalDifferred := 0
 	for i := 0; i < len(upperBases); i++ {
 		if upperBases[i] == '*' {
+			numSkipped++
 			continue
 		}
 
@@ -149,15 +151,15 @@ func calcPi(bases []*Base) (pi float64, n int) {
 			}
 
 			if upperBases[i] != upperBases[j] {
-				mean.Increment(1.0)
-			} else {
-				mean.Increment(0.0)
+				totalDifferred++
 			}
 		}
 	}
 
-	pi = mean.GetResult()
-	n = mean.GetN()
+	totalCompared := len(upperBases) - numSkipped
+	n = totalCompared * (totalCompared - 1) / 2
+	pi = float64(totalDifferred) / float64(n)
+
 	return
 }
 
@@ -196,15 +198,12 @@ func covSNPs(s1, s2 *SNP) (c *correlation.BivariateCovariance) {
 			var x, y float64
 			if p1.A.Base != p2.A.Base {
 				x = 1.0
-			} else {
-				x = 0.0
 			}
 
 			if p1.B.Base != p2.B.Base {
 				y = 1.0
-			} else {
-				y = 0.0
 			}
+
 			c.Increment(x, y)
 		}
 	}
