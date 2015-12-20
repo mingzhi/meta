@@ -235,10 +235,10 @@ func Calc(snpChan chan *SNP, profile []byte, t byte, maxl, geneLength int) (cCha
 
 			if len(storage) > maxl {
 				s1 := storage[0]
-				if profile[s1.Pos] == t {
+				if checkPosType(t, profile[s1.Pos]) {
 					for i := 1; i < len(storage); i++ {
 						s2 := storage[i]
-						if profile[s2.Pos] == t {
+						if checkPosType(t, profile[s2.Pos]) {
 							c.Calc(s1, s2)
 						}
 					}
@@ -302,4 +302,16 @@ func Collect(maxl int, cChan chan *Calculator) (means, covs, ks []*meanvar.MeanV
 	}
 
 	return
+}
+
+func checkPosType(t, t1 byte) bool {
+	if t == ThirdPos {
+		if t1 == ThirdPos || t1 == FourFold {
+			return true
+		} else {
+			return false
+		}
+	} else {
+		return t == t1
+	}
 }
