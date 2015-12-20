@@ -9,7 +9,9 @@ import (
 	"flag"
 	"fmt"
 	"github.com/mingzhi/ncbiftp/taxonomy"
+	"log"
 	"os"
+	"runtime/pprof"
 )
 
 var (
@@ -22,6 +24,7 @@ var (
 	pos                int // position for calculation.
 	minBQ              int
 	minDepth           int
+	cpuprofile         string
 )
 
 func init() {
@@ -30,6 +33,7 @@ func init() {
 	flag.IntVar(&pos, "pos", 4, "Position for SNP calculation")
 	flag.IntVar(&minBQ, "min-BQ", 30, "Minimum base quality for a base to be considered")
 	flag.IntVar(&minDepth, "min-depth", 10, "At a position, mimimum number of reads included to calculation")
+	flag.StringVar(&cpuprofile, "cpuprofile", "", "write cpu profile to file")
 	flag.Parse()
 	if flag.NArg() < 4 {
 		fmt.Println("meta_calc_corr <bam file> <ref genome sequence> <protein feature file> <output file>")
@@ -42,6 +46,15 @@ func init() {
 }
 
 func main() {
+	if cpuprofile != "" {
+		f, err := os.Create(cpuprofile)
+		if err != nil {
+			log.Fatal(err)
+		}
+		pprof.StartCPUProfile(f)
+		defer pprof.StopCPUProfile()
+	}
+
 	// Obtain codon table for following genome profiling.
 	codonTable := taxonomy.GeneticCodes()[codonTableId]
 	// Profiling genome using reference sequence and protein feature data.
