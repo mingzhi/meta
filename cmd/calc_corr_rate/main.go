@@ -54,7 +54,7 @@ func main() {
 	for snp := range snpChan {
 		if filterSNP(snp) {
 			pi := CalcPi(snp)
-			if !math.IsNaN(pi) {
+			if !math.IsNaN(pi.Pi) {
 				piArr = append(piArr, pi)
 			}
 		}
