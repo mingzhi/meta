@@ -12,12 +12,12 @@ func CalcCovRate(pis []Pi, profile []byte, pos byte, maxl int) (covs []float64, 
 	}
 
 	for i := 0; i < len(pis); i++ {
-		pos1 := profile[pis[i].Position]
+		pos1 := profile[pis[i].Position-1]
 		pos1 = convertPos(pos1, pos)
 
 		if pos1 == pos {
 			for j := i; j < len(pis); j++ {
-				pos2 := profile[pis[j].Position]
+				pos2 := profile[pis[j].Position-1]
 				pos2 = convertPos(pos2, pos)
 
 				if pos2 == pos {
