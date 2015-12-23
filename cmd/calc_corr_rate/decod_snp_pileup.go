@@ -28,13 +28,15 @@ func DecodePileup(r io.Reader, snpChan chan SNP) {
 		snp.Position = str2int(terms[1])
 		snp.RefBase = terms[2][0]
 		snp.Number = str2int(terms[3])
-		snp.ReadBases = decodeReadBases(terms[4])
-		snp.BaseQuals = decodeBaseQual(terms[5])
-		if snp.Number != len(snp.ReadBases) || snp.Number != len(snp.BaseQuals) {
-			fmt.Printf("%d\t%s\n", snp.Number, string(snp.ReadBases))
-		} else {
-			snp.ReadBases = filterBases(snp.ReadBases, snp.BaseQuals, 30)
-			snpChan <- snp
+		if snp.Number > 0 {
+			snp.ReadBases = decodeReadBases(terms[4])
+			snp.BaseQuals = decodeBaseQual(terms[5])
+			if snp.Number != len(snp.ReadBases) || snp.Number != len(snp.BaseQuals) {
+				fmt.Printf("%d\t%s\n", snp.Number, string(snp.ReadBases))
+			} else {
+				snp.ReadBases = filterBases(snp.ReadBases, snp.BaseQuals, 30)
+				snpChan <- snp
+			}
 		}
 	}
 
