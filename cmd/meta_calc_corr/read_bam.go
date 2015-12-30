@@ -1,14 +1,13 @@
 package main
 
 import (
-	"bytes"
 	"github.com/biogo/hts/bam"
 	"github.com/biogo/hts/sam"
 	"io"
 	"os"
 )
 
-// Read bam file, and return the header and a channel of sam records.
+// ReadBamFile reads bam file, and return the header and a channel of sam records.
 func ReadBamFile(fileName string) (h *sam.Header, c chan *sam.Record) {
 	// Initialize the channel of sam records.
 	c = make(chan *sam.Record)
@@ -54,7 +53,7 @@ func ReadBamFile(fileName string) (h *sam.Header, c chan *sam.Record) {
 	return
 }
 
-// Obtain a read mapping to the reference genome.
+// Map2Ref Obtains a read mapping to the reference genome.
 func Map2Ref(r *sam.Record) (s []byte, q []byte) {
 	p := 0                 // position in the read sequence.
 	read := r.Seq.Expand() // read sequence.
@@ -64,13 +63,15 @@ func Map2Ref(r *sam.Record) (s []byte, q []byte) {
 		case sam.CigarMatch, sam.CigarMismatch, sam.CigarEqual:
 			s = append(s, read[p:p+c.Len()]...)
 			q = append(q, qual[p:p+c.Len()]...)
-
 			p += c.Len()
 		case sam.CigarInsertion, sam.CigarSoftClipped, sam.CigarHardClipped:
 			p += c.Len()
+
 		case sam.CigarDeletion, sam.CigarSkipped:
-			s = append(s, bytes.Repeat([]byte{'*'}, c.Len())...)
-			q = append(s, bytes.Repeat([]byte{'*'}, c.Len())...)
+			for i := 0; i < c.Len(); i++ {
+				s = append(s, '*')
+				q = append(q, 0)
+			}
 		}
 	}
 

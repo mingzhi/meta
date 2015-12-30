@@ -1,13 +1,14 @@
 // This program calculate rate correlations (c_R) and structure correlation (c_R),
 // from a mapping results of metagenomic sequences to a reference genome.
 // We need two inputs:
-// 1. the mapping results in .bam format;
+// 1. the mapping results in .bam format, sorted;
 // 2. the reference genome sequence and the protein features.
 package main
 
 import (
 	"flag"
 	"fmt"
+	"github.com/mingzhi/ncbiftp/genomes/profiling"
 	"github.com/mingzhi/ncbiftp/taxonomy"
 	"log"
 	"os"
@@ -20,19 +21,21 @@ var (
 	proteinFeatureFile string // protein feature file
 	outFile            string
 	maxl               int
-	codonTableId       string
+	codonTableID       string
 	pos                int // position for calculation.
 	minBQ              int
 	minDepth           int
+	minMQ              int
 	cpuprofile         string
 )
 
 func init() {
-	flag.StringVar(&codonTableId, "codon", "11", "Codon table id")
+	flag.StringVar(&codonTableID, "codon", "11", "Codon table ID")
 	flag.IntVar(&maxl, "maxl", 500, "Maximum length of correlation distance")
 	flag.IntVar(&pos, "pos", 4, "Position for SNP calculation")
 	flag.IntVar(&minBQ, "min-BQ", 30, "Minimum base quality for a base to be considered")
 	flag.IntVar(&minDepth, "min-depth", 10, "At a position, mimimum number of reads included to calculation")
+	flag.IntVar(&minMQ, "min-MQ", 30, "Minimum read mapping quality")
 	flag.StringVar(&cpuprofile, "cpuprofile", "", "write cpu profile to file")
 	flag.Parse()
 	if flag.NArg() < 4 {
@@ -46,6 +49,7 @@ func init() {
 }
 
 func main() {
+	// Profile CPU usage.
 	if cpuprofile != "" {
 		f, err := os.Create(cpuprofile)
 		if err != nil {
@@ -56,17 +60,17 @@ func main() {
 	}
 
 	// Obtain codon table for following genome profiling.
-	codonTable := taxonomy.GeneticCodes()[codonTableId]
+	codonTable := taxonomy.GeneticCodes()[codonTableID]
 	// Profiling genome using reference sequence and protein feature data.
-	profile := ProfileGenome(genomeFile, proteinFeatureFile, codonTable)
+	profile := profiling.ProfileGenome(genomeFile, proteinFeatureFile, codonTable)
 
 	// Read mapping records in sam formate from the .bam file.
 	_, samRecordChan := ReadBamFile(bamFileName)
 	// Pileup the mapped bases for each genomic position.
 	snpChan := Pileup(samRecordChan)
 	// Using the pileup data for correlation calculation.
-	geneLength := len(profile) / 1000
-	cChan := Calc(snpChan, profile, convertPos(pos), maxl, geneLength)
+	positionType := convertPosType(pos)
+	cChan := Calc(snpChan, profile, positionType, maxl)
 	// Collect results from the calculator.
 	means, covs, ks := Collect(maxl, cChan)
 
@@ -83,17 +87,25 @@ func main() {
 	}
 }
 
-func convertPos(pos int) byte {
+func convertPosType(pos int) byte {
 	var p byte
 	switch pos {
+	case 0:
+		p = profiling.NonCoding
 	case 1:
-		p = FirstPos
+		p = profiling.FirstPos
+		break
 	case 2:
-		p = SecondPos
+		p = profiling.SecondPos
+		break
 	case 3:
-		p = ThirdPos
+		p = profiling.ThirdPos
+		break
 	case 4:
-		p = FourFold
+		p = profiling.FourFold
+		break
+	default:
+		p = profiling.Coding
 	}
 
 	return p

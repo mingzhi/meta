@@ -23,7 +23,7 @@ const (
 	Undefined byte = '5'
 )
 
-// Generate codon position profile for the entire genome.
+// ProfileGenome generates codon position profile for the entire genome.
 // First, we mark every position as NonCoding.
 // Then, for each coding (gene) region, we determine each codon position.
 // If there is an overlapping region between two genes, mark them as undefined.
@@ -58,7 +58,7 @@ func ProfileGenome(genomeFileName, pttFileName string, gc *taxonomy.GeneticCode)
 		}
 
 		prof := make([]byte, len(nucl))
-		for j, _ := range nucl {
+		for j := range nucl {
 			switch (j + 1) % 3 {
 			case 1:
 				prof[j] = FirstPos

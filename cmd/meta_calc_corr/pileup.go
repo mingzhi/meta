@@ -51,38 +51,45 @@ func Pileup(input chan *sam.Record) (output chan *SNP) {
 		// and for each record, obtain the bases,
 		// and group them into the corresponding SNP.
 		for r := range input {
-			s, q := Map2Ref(r)
-			for i := 0; i < len(s); i++ {
-				if s[i] != '*' {
-					b := Base{}
-					b.Base = s[i]
-					b.Pos = r.Pos + i + 1
-					b.Qual = q[i]
-					b.ReadId = r.Name
-					snp, found := m[b.Pos]
-					if !found {
-						snp = &SNP{}
-						snp.Pos = b.Pos
+			if int(r.MapQ) >= minMQ {
+				s, q := Map2Ref(r)
+				for i := 0; i < len(s); i++ {
+					if s[i] != '*' {
+						b := Base{}
+						b.Base = s[i]
+						b.Pos = r.Pos + i + 1
+						b.Qual = q[i]
+						b.ReadId = r.Name
+						// if strings.Contains(r.Flags.String(), "1") {
+						// 	b.ReadId += "_read1"
+						// } else {
+						// 	b.ReadId += "_read2"
+						// }
+
+						snp, found := m[b.Pos]
+						if !found {
+							snp = &SNP{}
+							snp.Pos = b.Pos
+						}
+						snp.Bases = append(snp.Bases, &b)
+						m[b.Pos] = snp
 					}
-					snp.Bases = append(snp.Bases, &b)
-					m[b.Pos] = snp
+				}
+
+				completedSNPs := clearSNPMap(m, r.Pos)
+				for _, snp := range completedSNPs {
+					output <- snp
 				}
 			}
-
-			m1, completedSNPs := ClearSNPMap(m, r.Pos)
-			for _, snp := range completedSNPs {
-				output <- snp
-			}
-			m = m1
 		}
 	}()
 
 	return
 }
 
-func ClearSNPMap(m map[int]*SNP, minPos int) (m1 map[int]*SNP, snps []*SNP) {
+func clearSNPMap(m map[int]*SNP, minPos int) (snps []*SNP) {
 	indices := []int{}
-	for i, _ := range m {
+	for i := range m {
 		indices = append(indices, i)
 	}
 	sort.Ints(indices)
@@ -93,11 +100,11 @@ func ClearSNPMap(m map[int]*SNP, minPos int) (m1 map[int]*SNP, snps []*SNP) {
 			delete(m, i)
 		}
 	}
-	m1 = m
+
 	return
 }
 
-// Filter low quality bases,
+// FilterSNP filters low quality bases,
 // and overlapped bases in the pair-end reads.
 func FilterSNP(s *SNP) *SNP {
 	m := make(map[string]*Base)
@@ -121,9 +128,12 @@ func FilterSNP(s *SNP) *SNP {
 		b.Base = toUpper(b.Base)
 		if bytes.Contains(ATGC, []byte{b.Base}) {
 			bases = append(bases, b)
+		} else {
+			fmt.Printf("%d\t%s\t%v\n", b.Pos, b.ReadId, b.Base)
 		}
 	}
 	s.Bases = bases
+
 	return s
 }
 

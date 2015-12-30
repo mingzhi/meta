@@ -2,20 +2,57 @@ package main
 
 import (
 	"bytes"
-	"github.com/mingzhi/gomath/stat/correlation"
 	"github.com/mingzhi/gomath/stat/desc"
 	"github.com/mingzhi/gomath/stat/desc/meanvar"
-	"math"
 )
 
+// Covariance contains cov structure
+type Covariance struct {
+	XY, X, Y float64
+	N        int
+}
+
+// NewCovariance create a Covariance
+func NewCovariance() *Covariance {
+	return &Covariance{}
+}
+
+// Increment add data to the calculator
+func (c *Covariance) Increment(x, y float64) {
+	c.XY += x * y
+	c.X += x
+	c.Y += y
+	c.N++
+}
+
+// GetResult returns the result.
+func (c *Covariance) GetResult() float64 {
+	var v float64
+	v = c.XY/float64(c.N) - (c.X/float64(c.N))*(c.Y/float64(c.N))
+	return v
+}
+
+// GetN returns N.
+func (c *Covariance) GetN() int {
+	return c.N
+}
+
+func (c *Covariance) GetMeanX() float64 {
+	return c.X / float64(c.N)
+}
+
+func (c *Covariance) GetMeanY() float64 {
+	return c.Y / float64(c.N)
+}
+
 type CovCalculator struct {
-	corrs []*correlation.BivariateCovariance
+	corrs []*Covariance
 }
 
 func NewCovCalculator(maxl int, bias bool) *CovCalculator {
 	cc := CovCalculator{}
 	for i := 0; i < maxl; i++ {
-		bc := correlation.NewBivariateCovariance(bias)
+		bc := NewCovariance()
 		cc.corrs = append(cc.corrs, bc)
 	}
 	return &cc
@@ -120,7 +157,7 @@ func (c *Calculator) Calc(s1, s2 *SNP) {
 		if nx > minDepth && ny > minDepth {
 			c.Cr.Increment(l, x, y)
 			cov := covSNPs(s1, s2)
-			if cov.GetN() > minDepth {
+			if cov.GetN() >= 50 {
 				c.Cs.Increment(l, cov.GetResult())
 			}
 			c.Ks.Increment(x)
@@ -129,36 +166,45 @@ func (c *Calculator) Calc(s1, s2 *SNP) {
 	}
 }
 
-func calcPi(bases []*Base) (pi float64, n int) {
+func calcPi(bases []*Base) (pi float64, depth int) {
 	bs := []byte{}
 	for i := 0; i < len(bases); i++ {
 		bs = append(bs, bases[i].Base)
 	}
-	// convert bases to upper case.
-	upperBases := bytes.ToUpper(bs)
 
-	numSkipped := 0
-	totalDifferred := 0
-	for i := 0; i < len(upperBases); i++ {
-		if upperBases[i] == '*' {
-			numSkipped++
-			continue
-		}
-
-		for j := i + 1; j < len(upperBases); j++ {
-			if upperBases[j] == '*' {
-				continue
-			}
-
-			if upperBases[i] != upperBases[j] {
-				totalDifferred++
-			}
+	counts := make([]int, 4)
+	ss := bytes.ToUpper(bs)
+	for i := 0; i < len(ss); i++ {
+		b := ss[i]
+		switch b {
+		case 'A':
+			counts[0]++
+			break
+		case 'T':
+			counts[1]++
+			break
+		case 'C':
+			counts[2]++
+			break
+		case 'G':
+			counts[3]++
 		}
 	}
 
-	totalCompared := len(upperBases) - numSkipped
-	n = totalCompared * (totalCompared - 1) / 2
-	pi = float64(totalDifferred) / float64(n)
+	total := 0
+	cross := 0
+	for i := 0; i < len(counts); i++ {
+		x := counts[i]
+		for j := i + 1; j < len(counts); j++ {
+			y := counts[j]
+			cross += x * y
+		}
+		total += x
+
+	}
+
+	pi = float64(cross) / float64(total*(total-1)/2)
+	depth = total
 
 	return
 }
@@ -188,8 +234,8 @@ func pairBases(s1, s2 *SNP) (pairs []BasePair) {
 	return
 }
 
-func covSNPs(s1, s2 *SNP) (c *correlation.BivariateCovariance) {
-	c = correlation.NewBivariateCovariance(false)
+func covSNPs(s1, s2 *SNP) (c *Covariance) {
+	c = NewCovariance()
 	pairs := pairBases(s1, s2)
 	for i := 0; i < len(pairs); i++ {
 		p1 := pairs[i]
@@ -209,108 +255,4 @@ func covSNPs(s1, s2 *SNP) (c *correlation.BivariateCovariance) {
 	}
 
 	return c
-}
-
-func Calc(snpChan chan *SNP, profile []byte, t byte, maxl, geneLength int) (cChan chan *Calculator) {
-
-	storage := []*SNP{}
-
-	cChan = make(chan *Calculator)
-
-	go func() {
-		defer close(cChan)
-
-		totalLength := geneLength
-		var c *Calculator
-		c = NewCalculator(maxl)
-		for snp := range snpChan {
-			if snp.Pos >= totalLength {
-				cChan <- c
-				c = NewCalculator(maxl)
-				totalLength += geneLength
-			}
-
-			storage = append(storage, snp)
-
-			if len(storage) > maxl {
-				s1 := storage[0]
-				if checkPosType(t, profile[s1.Pos]) {
-					for i := 1; i < len(storage); i++ {
-						s2 := storage[i]
-						if checkPosType(t, profile[s2.Pos]) {
-							c.Calc(s1, s2)
-						}
-					}
-				}
-				storage = storage[1:]
-			}
-		}
-
-		for i := 0; i < len(storage); i++ {
-			s1 := storage[i]
-			if profile[s1.Pos] == t {
-				for j := i + 1; j < len(storage); j++ {
-					s2 := storage[j]
-					if profile[s2.Pos] == t {
-						c.Calc(s1, s2)
-					}
-				}
-			}
-
-		}
-
-		cChan <- c
-	}()
-
-	return
-}
-
-func Collect(maxl int, cChan chan *Calculator) (means, covs, ks []*meanvar.MeanVar) {
-	for i := 0; i < maxl; i++ {
-		means = append(means, meanvar.New())
-		covs = append(covs, meanvar.New())
-	}
-
-	ks = make([]*meanvar.MeanVar, 2)
-	ks[0] = meanvar.New()
-	ks[1] = meanvar.New()
-
-	for c := range cChan {
-		cr := c.Cr
-		for i := 0; i < c.MaxL; i++ {
-			v := cr.GetResult(i)
-			if !math.IsNaN(v) {
-				covs[i].Increment(v)
-			}
-		}
-
-		cs := c.Cs
-		for i := 0; i < c.MaxL; i++ {
-			v := cs.GetMean(i)
-			if !math.IsNaN(v) {
-				means[i].Increment(v)
-			}
-		}
-
-		ksm := c.Ks.GetMean()
-		ksv := c.Ks.GetVariance()
-		if !math.IsNaN(ksv) {
-			ks[0].Increment(ksm)
-			ks[1].Increment(ksv)
-		}
-	}
-
-	return
-}
-
-func checkPosType(t, t1 byte) bool {
-	if t == ThirdPos {
-		if t1 == ThirdPos || t1 == FourFold {
-			return true
-		} else {
-			return false
-		}
-	} else {
-		return t == t1
-	}
 }
