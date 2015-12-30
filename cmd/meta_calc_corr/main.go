@@ -33,9 +33,9 @@ func init() {
 	flag.StringVar(&codonTableID, "codon", "11", "Codon table ID")
 	flag.IntVar(&maxl, "maxl", 500, "Maximum length of correlation distance")
 	flag.IntVar(&pos, "pos", 4, "Position for SNP calculation")
-	flag.IntVar(&minBQ, "min-BQ", 30, "Minimum base quality for a base to be considered")
-	flag.IntVar(&minDepth, "min-depth", 10, "At a position, mimimum number of reads included to calculation")
-	flag.IntVar(&minMQ, "min-MQ", 30, "Minimum read mapping quality")
+	flag.IntVar(&minBQ, "min-BQ", 13, "Minimum base quality for a base to be considered")
+	flag.IntVar(&minDepth, "min-depth", 20, "At a position, mimimum number of reads included to calculation")
+	flag.IntVar(&minMQ, "min-MQ", 0, "Minimum read mapping quality")
 	flag.StringVar(&cpuprofile, "cpuprofile", "", "write cpu profile to file")
 	flag.Parse()
 	if flag.NArg() < 4 {
@@ -72,7 +72,7 @@ func main() {
 	positionType := convertPosType(pos)
 	cChan := Calc(snpChan, profile, positionType, maxl)
 	// Collect results from the calculator.
-	means, covs, ks := Collect(maxl, cChan)
+	means, covs, ks, totals := Collect(maxl, cChan)
 
 	w, err := os.Create(outFile)
 	if err != nil {
@@ -80,10 +80,11 @@ func main() {
 	}
 	defer w.Close()
 	w.WriteString(fmt.Sprintf("#ks = %g, vd = %g, var ks = %g, var vd = %g\n", ks[0].Mean.GetResult(), ks[1].Mean.GetResult(), ks[0].Var.GetResult(), ks[1].Var.GetResult()))
-	w.WriteString("#i\tcs\tvar cs\tn cs\tcr\tvar cr\tn cr\n")
+	w.WriteString("#i\tcs\tvar cs\tn cs\tcr\tvar cr\tn cr\tct\tvar ct\tn ct\n")
 	for i := 0; i < len(means); i++ {
-		w.WriteString(fmt.Sprintf("%d\t%g\t%g\t%d\t%g\t%g\t%d\n", i, means[i].Mean.GetResult(), means[i].Var.GetResult(), means[i].Mean.GetN(),
-			covs[i].Mean.GetResult(), covs[i].Var.GetResult(), covs[i].Mean.GetN()))
+		w.WriteString(fmt.Sprintf("%d\t%g\t%g\t%d\t%g\t%g\t%d\t%g\t%g\t%d\n", i, means[i].Mean.GetResult(), means[i].Var.GetResult(), means[i].Mean.GetN(),
+			covs[i].Mean.GetResult(), covs[i].Var.GetResult(), covs[i].Mean.GetN(),
+			totals[i].Mean.GetResult(), totals[i].Var.GetResult(), totals[i].Mean.GetN()))
 	}
 }
 

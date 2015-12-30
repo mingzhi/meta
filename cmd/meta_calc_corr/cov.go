@@ -25,6 +25,14 @@ func (c *Covariance) Increment(x, y float64) {
 	c.N++
 }
 
+// Append merges another covariance.
+func (c *Covariance) Append(c1 *Covariance) {
+	c.XY += c1.XY
+	c.X += c1.X
+	c.Y += c1.Y
+	c.N += c1.N
+}
+
 // GetResult returns the result.
 func (c *Covariance) GetResult() float64 {
 	var v float64
@@ -37,10 +45,12 @@ func (c *Covariance) GetN() int {
 	return c.N
 }
 
+// GetMeanX return mean of X.
 func (c *Covariance) GetMeanX() float64 {
 	return c.X / float64(c.N)
 }
 
+// GetMeanY returns mean of Y.
 func (c *Covariance) GetMeanY() float64 {
 	return c.Y / float64(c.N)
 }
@@ -49,7 +59,7 @@ type CovCalculator struct {
 	corrs []*Covariance
 }
 
-func NewCovCalculator(maxl int, bias bool) *CovCalculator {
+func NewCovCalculator(maxl int) *CovCalculator {
 	cc := CovCalculator{}
 	for i := 0; i < maxl; i++ {
 		bc := NewCovariance()
@@ -60,6 +70,10 @@ func NewCovCalculator(maxl int, bias bool) *CovCalculator {
 
 func (c *CovCalculator) Increment(l int, x, y float64) {
 	c.corrs[l].Increment(x, y)
+}
+
+func (c *CovCalculator) Append(l int, c1 *Covariance) {
+	c.corrs[l].Append(c1)
 }
 
 func (c *CovCalculator) GetResult(l int) float64 {
@@ -133,15 +147,16 @@ type Calculator struct {
 	Cs   *MeanCovCalculator
 	Cr   *CovCalculator
 	Ks   *KsCalculator
+	Ct   *CovCalculator
 }
 
 func NewCalculator(maxl int) *Calculator {
 	c := Calculator{}
 	c.MaxL = maxl
-	bias := false
 	c.Cs = NewMeanCovCalculator(maxl)
-	c.Cr = NewCovCalculator(maxl, bias)
+	c.Cr = NewCovCalculator(maxl)
 	c.Ks = NewKsCalculator()
+	c.Ct = NewCovCalculator(maxl)
 	return &c
 }
 
@@ -152,16 +167,14 @@ func (c *Calculator) Calc(s1, s2 *SNP) {
 
 	l := s2.Pos - s1.Pos
 	if l < c.MaxL {
-		x, nx := calcPi(s1.Bases)
-		y, ny := calcPi(s2.Bases)
-		if nx > minDepth && ny > minDepth {
-			c.Cr.Increment(l, x, y)
-			cov := covSNPs(s1, s2)
-			if cov.GetN() >= 50 {
-				c.Cs.Increment(l, cov.GetResult())
-			}
-			c.Ks.Increment(x)
-			c.Ks.Increment(y)
+		cov := covSNPs(s1, s2)
+		cutoff := minDepth * (minDepth - 1) / 2
+		if cov.GetN() >= cutoff {
+			c.Cs.Increment(l, cov.GetResult())
+			c.Ct.Append(l, cov)
+			c.Cr.Increment(l, cov.GetMeanX(), cov.GetMeanY())
+			c.Ks.Increment(cov.GetMeanX())
+			c.Ks.Increment(cov.GetMeanY())
 		}
 	}
 }

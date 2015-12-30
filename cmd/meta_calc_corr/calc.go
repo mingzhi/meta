@@ -54,10 +54,11 @@ func calc(c *Calculator, snpArr []*SNP, t byte, profile []profiling.Pos, maxl in
 	}
 }
 
-func Collect(maxl int, cChan chan *Calculator) (means, covs, ks []*meanvar.MeanVar) {
+func Collect(maxl int, cChan chan *Calculator) (means, covs, ks, totals []*meanvar.MeanVar) {
 	for i := 0; i < maxl; i++ {
 		means = append(means, meanvar.New())
 		covs = append(covs, meanvar.New())
+		totals = append(totals, meanvar.New())
 	}
 
 	ks = make([]*meanvar.MeanVar, 2)
@@ -65,30 +66,22 @@ func Collect(maxl int, cChan chan *Calculator) (means, covs, ks []*meanvar.MeanV
 	ks[1] = meanvar.New()
 
 	for c := range cChan {
-		cr := c.Cr
-		for i := 0; i < c.MaxL; i++ {
-			v := cr.GetResult(i)
-			n := cr.GetN(i)
-			if !math.IsNaN(v) && n >= 50 {
-				covs[i].Increment(v)
-			}
-		}
 
-		cs := c.Cs
 		for i := 0; i < c.MaxL; i++ {
-			v := cs.GetMean(i)
-			n := cs.GetN(i)
-			if !math.IsNaN(v) && n >= 50 {
-				means[i].Increment(v)
-			}
-		}
+			cr := c.Cr.GetResult(i)
+			cs := c.Cs.GetMean(i)
+			ct := c.Ct.GetResult(i)
+			ksm := c.Ks.GetMean()
+			ksv := c.Ks.GetVariance()
+			n := c.Cr.GetN(i)
 
-		ksm := c.Ks.GetMean()
-		ksv := c.Ks.GetVariance()
-		n := c.Ks.GetN()
-		if !math.IsNaN(ksv) && n >= 50 {
-			ks[0].Increment(ksm)
-			ks[1].Increment(ksv)
+			if !math.IsNaN(cr) && !math.IsNaN(cs) && !math.IsNaN(ct) && n >= 50 {
+				covs[i].Increment(cr)
+				means[i].Increment(cs)
+				totals[i].Increment(ct)
+				ks[0].Increment(ksm)
+				ks[1].Increment(ksv)
+			}
 		}
 	}
 
