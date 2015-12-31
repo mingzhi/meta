@@ -74,7 +74,7 @@ func main() {
 	positionType := convertPosType(pos)
 	cChan := Calc(snpChan, profile, positionType, maxl)
 	// Collect results from the calculator.
-	cSs, cRs, ks, cTs := Collect(maxl, cChan)
+	cSs, cRs, xBars, yBars, cTs := Collect(maxl, cChan)
 
 	w, err := os.Create(outFile)
 	if err != nil {
@@ -82,20 +82,20 @@ func main() {
 	}
 	defer w.Close()
 
-	// Write comment section.
-	w.WriteString(fmt.Sprintf("#ks1 = %g, ks2 = %g, var ks1 = %g, var ks2 = %g\n", ks[0].Mean.GetResult(), ks[1].Mean.GetResult(), ks[0].Var.GetResult(), ks[1].Var.GetResult()))
-	w.WriteString("#i\tcs\tvar cs\tn cs\tcr\tvar cr\tn cr\tct\tvar ct\tn ct\n")
-
+	// Write header.
+	w.WriteString("#i\tcs\tvar cs\tn cs\tcr\tvar cr\tn cr\tct\tvar ct\tn ct\txbar\tvar xbar\tn xbar\tybar\tvar ybar\tn ybar\n")
 	for i := 0; i < len(cSs); i++ {
 		f := cRs[i].Var.GetResult()
 		n := cRs[i].Var.GetN()
 		if !math.IsNaN(f) && n > 0 {
 			w.WriteString(
-				fmt.Sprintf("%d\t%g\t%g\t%d\t%g\t%g\t%d\t%g\t%g\t%d\n",
+				fmt.Sprintf("%d\t%g\t%g\t%d\t%g\t%g\t%d\t%g\t%g\t%d\t%g\t%g\t%d\t%g\t%g\t%d\n",
 					i,
 					cSs[i].Mean.GetResult(), cSs[i].Var.GetResult(), cSs[i].Mean.GetN(),
 					cRs[i].Mean.GetResult(), cRs[i].Var.GetResult(), cRs[i].Mean.GetN(),
 					cTs[i].Mean.GetResult(), cTs[i].Var.GetResult(), cTs[i].Mean.GetN(),
+					xBars[i].Mean.GetResult(), xBars[i].Var.GetResult(), xBars[i].Mean.GetN(),
+					yBars[i].Mean.GetResult(), yBars[i].Var.GetResult(), yBars[i].Mean.GetN(),
 				),
 			)
 		}
