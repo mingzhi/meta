@@ -71,8 +71,8 @@ func Collect(maxl int, cChan chan *Calculator) (means, covs, ks, totals []*meanv
 			cr := c.Cr.GetResult(i)
 			cs := c.Cs.GetMean(i)
 			ct := c.Ct.GetResult(i)
-			ksm := c.Ks.GetMean()
-			ksv := c.Ks.GetVariance()
+			ksm := c.Ks.GetMean(0)
+			ksv := c.Ks.GetMean(1)
 			n := c.Cr.GetN(i)
 
 			if !math.IsNaN(cr) && !math.IsNaN(cs) && !math.IsNaN(ct) && n >= 50 {

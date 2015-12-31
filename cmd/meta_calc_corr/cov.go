@@ -1,8 +1,6 @@
 package main
 
 import (
-	"bytes"
-	"github.com/mingzhi/gomath/stat/desc"
 	"github.com/mingzhi/gomath/stat/desc/meanvar"
 )
 
@@ -55,12 +53,14 @@ func (c *Covariance) GetMeanY() float64 {
 	return c.Y / float64(c.N)
 }
 
-type CovCalculator struct {
+// Covariances contains an array of Coveriance.
+type Covariances struct {
 	corrs []*Covariance
 }
 
-func NewCovCalculator(maxl int) *CovCalculator {
-	cc := CovCalculator{}
+// NewCovariances create a new Covariances
+func NewCovariances(maxl int) *Covariances {
+	cc := Covariances{}
 	for i := 0; i < maxl; i++ {
 		bc := NewCovariance()
 		cc.corrs = append(cc.corrs, bc)
@@ -68,98 +68,83 @@ func NewCovCalculator(maxl int) *CovCalculator {
 	return &cc
 }
 
-func (c *CovCalculator) Increment(l int, x, y float64) {
+// Increment add data (x, y) to the l Covariance.
+func (c *Covariances) Increment(l int, x, y float64) {
 	c.corrs[l].Increment(x, y)
 }
 
-func (c *CovCalculator) Append(l int, c1 *Covariance) {
+// Append append a Covariance to the l Covariance.
+func (c *Covariances) Append(l int, c1 *Covariance) {
 	c.corrs[l].Append(c1)
 }
 
-func (c *CovCalculator) GetResult(l int) float64 {
+// GetResult returns the result.
+func (c *Covariances) GetResult(l int) float64 {
 	return c.corrs[l].GetResult()
 }
 
-func (c *CovCalculator) GetN(l int) int {
+// GetN returns the number of data points.
+func (c *Covariances) GetN(l int) int {
 	return c.corrs[l].GetN()
 }
 
-type MeanCovCalculator struct {
+// MeanVariances is an array of MeanVar.
+type MeanVariances struct {
 	meanvars []*meanvar.MeanVar
 }
 
-func NewMeanCovCalculator(maxl int) *MeanCovCalculator {
-	mcc := MeanCovCalculator{}
-	for i := 0; i < maxl; i++ {
+// NewMeanVariances return a new MeanVariances of length maxl.
+func NewMeanVariances(size int) *MeanVariances {
+	mcc := MeanVariances{}
+	for i := 0; i < size; i++ {
 		mv := meanvar.New()
 		mcc.meanvars = append(mcc.meanvars, mv)
 	}
 	return &mcc
 }
 
-func (m *MeanCovCalculator) Increment(l int, v float64) {
+// Increment add a data point to the lst MeanVar.
+func (m *MeanVariances) Increment(l int, v float64) {
 	m.meanvars[l].Increment(v)
 }
 
-func (m *MeanCovCalculator) GetMean(l int) float64 {
+
+// GetMean returns the mean of the lst MeanVar.
+func (m *MeanVariances) GetMean(l int) float64 {
 	return m.meanvars[l].Mean.GetResult()
 }
 
-func (m *MeanCovCalculator) GetVar(l int) float64 {
+// GetVar returns the variance of the lst MeanVar.
+func (m *MeanVariances) GetVar(l int) float64 {
 	return m.meanvars[l].Var.GetResult()
 }
 
-func (m *MeanCovCalculator) GetN(l int) int {
+// GetN returns the size of the data points of the lst MeanVar.
+func (m *MeanVariances) GetN(l int) int {
 	return m.meanvars[l].Mean.GetN()
 }
 
-type KsCalculator struct {
-	mean     *desc.Mean
-	variance *desc.Variance
-}
-
-func NewKsCalculator() *KsCalculator {
-	ks := KsCalculator{}
-	ks.mean = desc.NewMean()
-	ks.variance = desc.NewVariance()
-	return &ks
-}
-
-func (k *KsCalculator) Increment(f float64) {
-	k.mean.Increment(f)
-	k.variance.Increment(f)
-}
-
-func (k *KsCalculator) GetMean() float64 {
-	return k.mean.GetResult()
-}
-
-func (k *KsCalculator) GetVariance() float64 {
-	return k.variance.GetResult()
-}
-
-func (k *KsCalculator) GetN() int {
-	return k.mean.GetN()
-}
-
+// Calculator contains individual calculators.
 type Calculator struct {
 	MaxL int
-	Cs   *MeanCovCalculator
-	Cr   *CovCalculator
-	Ks   *KsCalculator
-	Ct   *CovCalculator
+	Cs   *MeanVariances
+    Ks   *MeanVariances
+	Cr   *Covariances
+	Ct   *Covariances
 }
 
+// NewCalculator returns a new Calculator
 func NewCalculator(maxl int) *Calculator {
 	c := Calculator{}
 	c.MaxL = maxl
-	c.Cs = NewMeanCovCalculator(maxl)
-	c.Cr = NewCovCalculator(maxl)
-	c.Ks = NewKsCalculator()
-	c.Ct = NewCovCalculator(maxl)
+	c.Cs = NewMeanVariances(maxl)
+	c.Cr = NewCovariances(maxl)
+	c.Ks = NewMeanVariances(2)
+	c.Ct = NewCovariances(maxl)
 	return &c
 }
 
+// Calc add two SNP.
 func (c *Calculator) Calc(s1, s2 *SNP) {
 	if s1.Pos > s2.Pos {
 		s1, s2 = s2, s1
@@ -167,66 +152,45 @@ func (c *Calculator) Calc(s1, s2 *SNP) {
 
 	l := s2.Pos - s1.Pos
 	if l < c.MaxL {
-		cov := covSNPs(s1, s2)
-		cutoff := minDepth * (minDepth - 1) / 2
-		if cov.GetN() >= cutoff {
-			c.Cs.Increment(l, cov.GetResult())
+        basePairs := pairBases(s1, s2)
+        if len(basePairs) >= minDepth {
+            cov := covPairedBases(basePairs)
+            c.Cs.Increment(l, cov.GetResult())
 			c.Ct.Append(l, cov)
 			c.Cr.Increment(l, cov.GetMeanX(), cov.GetMeanY())
-			c.Ks.Increment(cov.GetMeanX())
-			c.Ks.Increment(cov.GetMeanY())
-		}
+			c.Ks.Increment(0, cov.GetMeanX())
+			c.Ks.Increment(1, cov.GetMeanY())
+        }
 	}
 }
 
-func calcPi(bases []*Base) (pi float64, depth int) {
-	bs := []byte{}
-	for i := 0; i < len(bases); i++ {
-		bs = append(bs, bases[i].Base)
-	}
+func covPairedBases(pairs []basePair) (c *Covariance)  {
+    c = NewCovariance()
+    for i := 0; i < len(pairs); i++ {
+		p1 := pairs[i]
+		for j := i + 1; j < len(pairs); j++ {
+			p2 := pairs[j]
+			var x, y float64
+			if p1.a.Base != p2.a.Base {
+				x = 1.0
+			}
 
-	counts := make([]int, 4)
-	ss := bytes.ToUpper(bs)
-	for i := 0; i < len(ss); i++ {
-		b := ss[i]
-		switch b {
-		case 'A':
-			counts[0]++
-			break
-		case 'T':
-			counts[1]++
-			break
-		case 'C':
-			counts[2]++
-			break
-		case 'G':
-			counts[3]++
+			if p1.b.Base != p2.b.Base {
+				y = 1.0
+			}
+
+			c.Increment(x, y)
 		}
 	}
-
-	total := 0
-	cross := 0
-	for i := 0; i < len(counts); i++ {
-		x := counts[i]
-		for j := i + 1; j < len(counts); j++ {
-			y := counts[j]
-			cross += x * y
-		}
-		total += x
-
-	}
-
-	pi = float64(cross) / float64(total*(total-1)/2)
-	depth = total
-
-	return
+    return c
 }
 
-type BasePair struct {
-	A, B *Base
+// basePair is a pair of bases, which come from the same read (or paired-end).
+type basePair struct {
+	a, b *Base
 }
 
-func pairBases(s1, s2 *SNP) (pairs []BasePair) {
+func pairBases(s1, s2 *SNP) (pairs []basePair) {
 	m := make(map[string]*Base)
 	for i := 0; i < len(s1.Bases); i++ {
 		b := s1.Bases[i]
@@ -240,32 +204,9 @@ func pairBases(s1, s2 *SNP) (pairs []BasePair) {
 			if b1.Pos > b2.Pos {
 				b1, b2 = b2, b1
 			}
-			pairs = append(pairs, BasePair{b1, b2})
+			pairs = append(pairs, basePair{b1, b2})
 		}
 	}
 
 	return
-}
-
-func covSNPs(s1, s2 *SNP) (c *Covariance) {
-	c = NewCovariance()
-	pairs := pairBases(s1, s2)
-	for i := 0; i < len(pairs); i++ {
-		p1 := pairs[i]
-		for j := i + 1; j < len(pairs); j++ {
-			p2 := pairs[j]
-			var x, y float64
-			if p1.A.Base != p2.A.Base {
-				x = 1.0
-			}
-
-			if p1.B.Base != p2.B.Base {
-				y = 1.0
-			}
-
-			c.Increment(x, y)
-		}
-	}
-
-	return c
 }
