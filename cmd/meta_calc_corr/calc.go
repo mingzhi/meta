@@ -89,8 +89,20 @@ func Collect(maxl int, cChan chan *Calculator) (means, covs, ks, totals []*meanv
 }
 
 func checkPosType(t, t1 byte) bool {
-	if t == ThirdPos {
-		if t1 == ThirdPos || t1 == FourFold {
+	isFirstPos := t1 == profiling.FirstPos
+	isSecondPos := t1 == profiling.SecondPos
+	isThirdPos := t1 == profiling.ThirdPos
+	isFourFold := t1 == profiling.FourFold
+
+	if t == profiling.Coding {
+		if isFirstPos || isSecondPos || isThirdPos || isFourFold {
+			return true
+		}
+		return false
+	}
+
+	if t == profiling.ThirdPos {
+		if isThirdPos || isFourFold {
 			return true
 		}
 		return false
