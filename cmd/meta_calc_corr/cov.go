@@ -88,6 +88,16 @@ func (c *Covariances) GetN(l int) int {
 	return c.corrs[l].GetN()
 }
 
+// GetMeanX returns x_bar.
+func (c *Covariances) GetMeanX(l int) float64 {
+	return c.corrs[l].GetMeanX()
+}
+
+// GetMeanY returns y_bar.
+func (c *Covariances) GetMeanY(l int) float64 {
+	return c.corrs[l].GetMeanY()
+}
+
 // MeanVariances is an array of MeanVar.
 type MeanVariances struct {
 	meanvars []*meanvar.MeanVar
@@ -108,7 +118,6 @@ func (m *MeanVariances) Increment(l int, v float64) {
 	m.meanvars[l].Increment(v)
 }
 
-
 // GetMean returns the mean of the lst MeanVar.
 func (m *MeanVariances) GetMean(l int) float64 {
 	return m.meanvars[l].Mean.GetResult()
@@ -128,7 +137,6 @@ func (m *MeanVariances) GetN(l int) int {
 type Calculator struct {
 	MaxL int
 	Cs   *MeanVariances
-    Ks   *MeanVariances
 	Cr   *Covariances
 	Ct   *Covariances
 }
@@ -139,7 +147,6 @@ func NewCalculator(maxl int) *Calculator {
 	c.MaxL = maxl
 	c.Cs = NewMeanVariances(maxl)
 	c.Cr = NewCovariances(maxl)
-	c.Ks = NewMeanVariances(2)
 	c.Ct = NewCovariances(maxl)
 	return &c
 }
@@ -152,21 +159,19 @@ func (c *Calculator) Calc(s1, s2 *SNP) {
 
 	l := s2.Pos - s1.Pos
 	if l < c.MaxL {
-        basePairs := pairBases(s1, s2)
-        if len(basePairs) >= minDepth {
-            cov := covPairedBases(basePairs)
-            c.Cs.Increment(l, cov.GetResult())
+		basePairs := pairBases(s1, s2)
+		if len(basePairs) >= minDepth {
+			cov := covPairedBases(basePairs)
+			c.Cs.Increment(l, cov.GetResult())
 			c.Ct.Append(l, cov)
 			c.Cr.Increment(l, cov.GetMeanX(), cov.GetMeanY())
-			c.Ks.Increment(0, cov.GetMeanX())
-			c.Ks.Increment(1, cov.GetMeanY())
-        }
+		}
 	}
 }
 
-func covPairedBases(pairs []basePair) (c *Covariance)  {
-    c = NewCovariance()
-    for i := 0; i < len(pairs); i++ {
+func covPairedBases(pairs []basePair) (c *Covariance) {
+	c = NewCovariance()
+	for i := 0; i < len(pairs); i++ {
 		p1 := pairs[i]
 		for j := i + 1; j < len(pairs); j++ {
 			p2 := pairs[j]
@@ -182,7 +187,7 @@ func covPairedBases(pairs []basePair) (c *Covariance)  {
 			c.Increment(x, y)
 		}
 	}
-    return c
+	return c
 }
 
 // basePair is a pair of bases, which come from the same read (or paired-end).
