@@ -8,6 +8,8 @@ package main
 import (
 	"flag"
 	"fmt"
+	"github.com/mingzhi/biogo/feat/gff"
+	"github.com/mingzhi/biogo/seq"
 	"github.com/mingzhi/ncbiftp/genomes/profiling"
 	"github.com/mingzhi/ncbiftp/taxonomy"
 	"log"
@@ -62,7 +64,9 @@ func main() {
 	// Obtain codon table for following genome profiling.
 	codonTable := taxonomy.GeneticCodes()[codonTableID]
 	// Profiling genome using reference sequence and protein feature data.
-	profile := profiling.ProfileGenome(genomeFile, proteinFeatureFile, codonTable)
+	genome := readGenome(genomeFile)
+	gffRecords := readGff(proteinFeatureFile)
+	profile := profiling.ProfileGenome(genome, gffRecords, codonTable)
 
 	// Read mapping records in sam formate from the .bam file.
 	_, samRecordChan := ReadBamFile(bamFileName)
@@ -86,6 +90,45 @@ func main() {
 			covs[i].Mean.GetResult(), covs[i].Var.GetResult(), covs[i].Mean.GetN(),
 			totals[i].Mean.GetResult(), totals[i].Var.GetResult(), totals[i].Mean.GetN()))
 	}
+}
+
+func readGenome(filename string) []byte {
+	f, err := os.Open(filename)
+	if err != nil {
+		panic(err)
+	}
+	defer f.Close()
+
+	rd := seq.NewFastaReader(f)
+	ss, err := rd.ReadAll()
+	if err != nil {
+		panic(err)
+	}
+
+	return ss[0].Seq
+}
+
+func readGff(filename string) []*gff.Record {
+	f, err := os.Open(filename)
+	if err != nil {
+		panic(err)
+	}
+	defer f.Close()
+
+	rd := gff.NewReader(f)
+	ss, err := rd.ReadAll()
+	if err != nil {
+		panic(err)
+	}
+
+	records := []*gff.Record{}
+	for _, s := range ss {
+		if s.Feature == "CDS" {
+			records = append(records, s)
+		}
+	}
+
+	return records
 }
 
 func convertPosType(pos int) byte {

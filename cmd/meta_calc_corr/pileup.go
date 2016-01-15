@@ -60,11 +60,6 @@ func Pileup(input chan *sam.Record) (output chan *SNP) {
 						b.Pos = r.Pos + i + 1
 						b.Qual = q[i]
 						b.ReadId = r.Name
-						// if strings.Contains(r.Flags.String(), "1") {
-						// 	b.ReadId += "_read1"
-						// } else {
-						// 	b.ReadId += "_read2"
-						// }
 
 						snp, found := m[b.Pos]
 						if !found {

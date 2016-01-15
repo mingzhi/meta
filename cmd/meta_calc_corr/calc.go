@@ -6,10 +6,9 @@ import (
 	"math"
 )
 
+// Calc perform calculations.
 func Calc(snpChan chan *SNP, profile []profiling.Pos, posType byte, maxl int) (cChan chan *Calculator) {
-
 	cChan = make(chan *Calculator)
-
 	go func() {
 		defer close(cChan)
 
@@ -23,17 +22,17 @@ func Calc(snpChan chan *SNP, profile []profiling.Pos, posType byte, maxl int) (c
 				if len(storage) != 0 && geneName != geneName1 {
 					calc(c, storage, posType, profile, maxl)
 					cChan <- c
+
+					// creat new storages.
 					c = NewCalculator(maxl)
 					geneName = geneName1
 					storage = []*SNP{}
-
 				}
 				storage = append(storage, snp)
 			}
 		}
 
 		calc(c, storage, posType, profile, maxl)
-
 		cChan <- c
 	}()
 
@@ -89,8 +88,8 @@ func Collect(maxl int, cChan chan *Calculator) (means, covs, ks, totals []*meanv
 }
 
 func checkPosType(t, t1 byte) bool {
-	if t == ThirdPos {
-		if t1 == ThirdPos || t1 == FourFold {
+	if t == profiling.ThirdPos {
+		if t1 == profiling.ThirdPos || t1 == profiling.FourFold {
 			return true
 		}
 		return false
