@@ -22,7 +22,7 @@ import (
 var (
 	bamFileName  string // mapping results in .bam file
 	genomeFile   string // genome accession number
-	pttFile      string // protein feature file
+	gffFile      string // protein feature file
 	outFile      string // output file.
 	maxl         int    // max length of correlation.
 	codonTableID string // codon table ID.
@@ -48,7 +48,7 @@ func init() {
 	}
 	bamFileName = flag.Arg(0)
 	genomeFile = flag.Arg(1)
-	pttFile = flag.Arg(2)
+	gffFile = flag.Arg(2)
 	outFile = flag.Arg(3)
 }
 
@@ -67,7 +67,7 @@ func main() {
 	codonTable := taxonomy.GeneticCodes()[codonTableID]
 	// Profiling genome using reference sequence and protein feature data.
 	genome := readGenome(genomeFile)
-	gffRecords := readGff(proteinFeatureFile)
+	gffRecords := readGff(gffFile)
 	profile := profiling.ProfileGenome(genome, gffRecords, codonTable)
 
 	// Read mapping records in sam formate from the .bam file.
