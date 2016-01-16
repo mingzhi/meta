@@ -14,6 +14,7 @@ import (
 	"log"
 	"math"
 	"os"
+	"runtime"
 	"runtime/pprof"
 )
 
@@ -28,7 +29,9 @@ var (
 	minBQ        int
 	minDepth     int
 	minMQ        int
+	minLength    int
 	cpuprofile   string
+	ncpu         int
 )
 
 func init() {
@@ -38,6 +41,8 @@ func init() {
 	flag.IntVar(&minBQ, "min-BQ", 13, "Minimum base quality for a base to be considered")
 	flag.IntVar(&minDepth, "min-depth", 20, "At a position, mimimum number of reads included to calculation")
 	flag.IntVar(&minMQ, "min-MQ", 0, "Minimum read mapping quality")
+	flag.IntVar(&minLength, "min-length", 0, "Minimum read length")
+	flag.IntVar(&ncpu, "ncpu", runtime.NumCPU(), "number of cpus")
 	flag.StringVar(&cpuprofile, "cpuprofile", "", "write cpu profile to file")
 	flag.Parse()
 	if flag.NArg() < 4 {
@@ -48,6 +53,8 @@ func init() {
 	genomeFile = flag.Arg(1)
 	pttFile = flag.Arg(2)
 	outFile = flag.Arg(3)
+
+	runtime.GOMAXPROCS(ncpu)
 }
 
 func main() {

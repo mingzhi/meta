@@ -41,7 +41,7 @@ func (s *SNP) String() string {
 }
 
 func Pileup(input chan *sam.Record) (output chan *SNP) {
-	output = make(chan *SNP)
+	output = make(chan *SNP, ncpu)
 
 	go func() {
 		defer close(output)
@@ -53,33 +53,43 @@ func Pileup(input chan *sam.Record) (output chan *SNP) {
 		for r := range input {
 			if int(r.MapQ) >= minMQ {
 				s, q := Map2Ref(r)
-				for i := 0; i < len(s); i++ {
-					if s[i] != '*' {
-						b := Base{}
-						b.Base = s[i]
-						b.Pos = r.Pos + i + 1
-						b.Qual = q[i]
-						b.ReadId = r.Name
-						// if strings.Contains(r.Flags.String(), "1") {
-						// 	b.ReadId += "_read1"
-						// } else {
-						// 	b.ReadId += "_read2"
-						// }
-
-						snp, found := m[b.Pos]
-						if !found {
-							snp = &SNP{}
-							snp.Pos = b.Pos
-						}
-						snp.Bases = append(snp.Bases, &b)
-						m[b.Pos] = snp
+				toCalculated := true
+				if minLength > 0 {
+					if len(s) < minLength {
+						toCalculated = false
 					}
 				}
 
-				completedSNPs := clearSNPMap(m, r.Pos)
-				for _, snp := range completedSNPs {
-					output <- snp
+				if toCalculated {
+					for i := 0; i < len(s); i++ {
+						if s[i] != '*' {
+							b := Base{}
+							b.Base = s[i]
+							b.Pos = r.Pos + i + 1
+							b.Qual = q[i]
+							b.ReadId = r.Name
+							// if strings.Contains(r.Flags.String(), "1") {
+							// 	b.ReadId += "_read1"
+							// } else {
+							// 	b.ReadId += "_read2"
+							// }
+
+							snp, found := m[b.Pos]
+							if !found {
+								snp = &SNP{}
+								snp.Pos = b.Pos
+							}
+							snp.Bases = append(snp.Bases, &b)
+							m[b.Pos] = snp
+						}
+					}
+
+					completedSNPs := clearSNPMap(m, r.Pos)
+					for _, snp := range completedSNPs {
+						output <- snp
+					}
 				}
+
 			}
 		}
 	}()
@@ -133,7 +143,6 @@ func FilterSNP(s *SNP) *SNP {
 		}
 	}
 	s.Bases = bases
-
 	return s
 }
 

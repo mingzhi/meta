@@ -1,40 +1,58 @@
 package main
 
 import (
+	"fmt"
 	"github.com/mingzhi/gomath/stat/desc/meanvar"
 	"github.com/mingzhi/ncbiftp/genomes/profiling"
 	"math"
+	"runtime"
 )
 
 func Calc(snpChan chan *SNP, profile []profiling.Pos, posType byte, maxl int) (cChan chan *Calculator) {
-
-	cChan = make(chan *Calculator)
-
+	ncpu := runtime.GOMAXPROCS(0)
+	// create job chan
+	// each job is a list of SNP in a gene.
+	geneSNPChan := make(chan []*SNP, ncpu)
 	go func() {
-		defer close(cChan)
-
-		var storage []*SNP
+		defer close(geneSNPChan)
 		var geneName string
-		var c *Calculator
-		c = NewCalculator(maxl)
+		var storage []*SNP
 		for snp := range snpChan {
 			if checkPosType(posType, profile[snp.Pos-1].Type) {
 				geneName1 := profile[snp.Pos-1].Gene
 				if len(storage) != 0 && geneName != geneName1 {
-					calc(c, storage, posType, profile, maxl)
-					cChan <- c
-					c = NewCalculator(maxl)
-					geneName = geneName1
+					geneSNPChan <- storage
 					storage = []*SNP{}
-
+					geneName = geneName1
+					fmt.Println(geneName)
 				}
 				storage = append(storage, snp)
 			}
 		}
 
-		calc(c, storage, posType, profile, maxl)
+		if len(storage) != 0 {
+			geneSNPChan <- storage
+		}
+	}()
 
-		cChan <- c
+	cChan = make(chan *Calculator)
+	done := make(chan bool)
+	for i := 0; i < ncpu; i++ {
+		go func() {
+			for storage := range geneSNPChan {
+				c := NewCalculator(maxl)
+				calc(c, storage, posType, profile, maxl)
+				cChan <- c
+			}
+			done <- true
+		}()
+	}
+
+	go func() {
+		defer close(cChan)
+		for i := 0; i < ncpu; i++ {
+			<-done
+		}
 	}()
 
 	return
