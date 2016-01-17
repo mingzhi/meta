@@ -9,6 +9,8 @@ package main
 import (
 	"flag"
 	"fmt"
+	"github.com/mingzhi/biogo/feat/gff"
+	"github.com/mingzhi/biogo/seq"
 	"github.com/mingzhi/ncbiftp/genomes/profiling"
 	"github.com/mingzhi/ncbiftp/taxonomy"
 	"log"
@@ -21,7 +23,7 @@ import (
 var (
 	bamFileName  string // mapping results in .bam file
 	genomeFile   string // genome accession number
-	pttFile      string // protein feature file
+	gffFile      string // protein feature file
 	outFile      string // output file.
 	maxl         int    // max length of correlation.
 	codonTableID string // codon table ID.
@@ -51,7 +53,7 @@ func init() {
 	}
 	bamFileName = flag.Arg(0)
 	genomeFile = flag.Arg(1)
-	pttFile = flag.Arg(2)
+	gffFile = flag.Arg(2)
 	outFile = flag.Arg(3)
 
 	runtime.GOMAXPROCS(ncpu)
@@ -71,7 +73,9 @@ func main() {
 	// Obtain codon table for identifying four-fold degenerate sites.
 	codonTable := taxonomy.GeneticCodes()[codonTableID]
 	// Profiling genome using reference sequence and protein feature data.
-	profile := profiling.ProfileGenome(genomeFile, pttFile, codonTable)
+	genome := readGenome(genomeFile)
+	gffRecords := readGff(gffFile)
+	profile := profiling.ProfileGenome(genome, gffRecords, codonTable)
 
 	// Read mapping records in sam formate from the .bam file.
 	_, samRecordChan := ReadBamFile(bamFileName)
@@ -107,6 +111,45 @@ func main() {
 			)
 		}
 	}
+}
+
+func readGenome(filename string) []byte {
+	f, err := os.Open(filename)
+	if err != nil {
+		panic(err)
+	}
+	defer f.Close()
+
+	rd := seq.NewFastaReader(f)
+	ss, err := rd.ReadAll()
+	if err != nil {
+		panic(err)
+	}
+
+	return ss[0].Seq
+}
+
+func readGff(filename string) []*gff.Record {
+	f, err := os.Open(filename)
+	if err != nil {
+		panic(err)
+	}
+	defer f.Close()
+
+	rd := gff.NewReader(f)
+	ss, err := rd.ReadAll()
+	if err != nil {
+		panic(err)
+	}
+
+	records := []*gff.Record{}
+	for _, s := range ss {
+		if s.Feature == "CDS" {
+			records = append(records, s)
+		}
+	}
+
+	return records
 }
 
 func convertPosType(pos int) byte {

@@ -7,6 +7,11 @@ import (
 	"os"
 )
 
+type SamReader interface {
+	Header() *sam.Header
+	Read() (*sam.Record, error)
+}
+
 // ReadBamFile reads bam file, and return the header and a channel of sam records.
 func ReadBamFile(fileName string) (h *sam.Header, c chan *sam.Record) {
 	// Initialize the channel of sam records.
@@ -24,22 +29,29 @@ func ReadBamFile(fileName string) (h *sam.Header, c chan *sam.Record) {
 		}
 		defer f.Close()
 
-		// Create a bam reader, and close it when finished.
-		rd := 0 // If rd is zero concurrency is set to GOMAXPROCS.
-		bamReader, err := bam.NewReader(f, rd)
-		if err != nil {
-			panic(err)
+		var reader SamReader
+		if fileName[len(fileName)-3:] == "bam" {
+			bamReader, err := bam.NewReader(f, 0)
+			if err != nil {
+				panic(err)
+			}
+			defer bamReader.Close()
+			reader = bamReader
+		} else {
+			reader, err = sam.NewReader(f)
+			if err != nil {
+				panic(err)
+			}
 		}
-		defer bamReader.Close()
 
 		// Read and assign header.
-		h = bamReader.Header()
+		h = reader.Header()
 
 		// Read sam records and send them to the channel,
 		// until it hit an error, which raises a panic
 		// if it is not a IO EOF.
 		for {
-			rec, err := bamReader.Read()
+			rec, err := reader.Read()
 			if err != nil {
 				if err != io.EOF {
 					panic(err)

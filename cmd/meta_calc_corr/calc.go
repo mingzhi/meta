@@ -8,6 +8,7 @@ import (
 	"runtime"
 )
 
+// Calc perform calculations.
 func Calc(snpChan chan *SNP, profile []profiling.Pos, posType byte, maxl int) (cChan chan *Calculator) {
 	ncpu := runtime.GOMAXPROCS(0)
 	// create job chan
