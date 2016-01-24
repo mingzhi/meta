@@ -1,9 +1,9 @@
 package main
 
 import (
-	"fmt"
 	"github.com/mingzhi/gomath/stat/desc/meanvar"
 	"github.com/mingzhi/ncbiftp/genomes/profiling"
+	"log"
 	"math"
 	"runtime"
 )
@@ -25,7 +25,6 @@ func Calc(snpChan chan *SNP, profile []profiling.Pos, posType byte, maxl int) (c
 					geneSNPChan <- storage
 					storage = []*SNP{}
 					geneName = geneName1
-					fmt.Println(geneName)
 				}
 				storage = append(storage, snp)
 			}
@@ -34,6 +33,8 @@ func Calc(snpChan chan *SNP, profile []profiling.Pos, posType byte, maxl int) (c
 		if len(storage) != 0 {
 			geneSNPChan <- storage
 		}
+
+		log.Println("Finished generating gene SNP!")
 	}()
 
 	cChan = make(chan *Calculator)
@@ -54,6 +55,8 @@ func Calc(snpChan chan *SNP, profile []profiling.Pos, posType byte, maxl int) (c
 		for i := 0; i < ncpu; i++ {
 			<-done
 		}
+
+		log.Println("Finished calculation!")
 	}()
 
 	return

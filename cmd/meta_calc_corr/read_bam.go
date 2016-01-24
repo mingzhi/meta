@@ -4,6 +4,7 @@ import (
 	"github.com/biogo/hts/bam"
 	"github.com/biogo/hts/sam"
 	"io"
+	"log"
 	"os"
 )
 
@@ -60,6 +61,7 @@ func ReadBamFile(fileName string) (h *sam.Header, c chan *sam.Record) {
 			}
 			c <- rec
 		}
+		log.Println("Finished reading bam file!")
 	}()
 
 	return

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"github.com/biogo/hts/sam"
+	"log"
 	"sort"
 )
 
@@ -87,6 +88,8 @@ func Pileup(input chan *sam.Record) (output chan *SNP) {
 
 			}
 		}
+
+		log.Println("Finished pileup!")
 	}()
 
 	return

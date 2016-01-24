@@ -1,8 +1,9 @@
 package main
 
 import (
-    "strings"
 	"github.com/biogo/hts/sam"
+	"log"
+	"strings"
 )
 
 func FilterReads(input chan *sam.Record) (output chan *sam.Record) {
@@ -41,13 +42,14 @@ func FilterReads(input chan *sam.Record) (output chan *sam.Record) {
 				}
 			}
 		}
+		log.Println("Finished filtering reads!")
 	}()
 
 	return
 }
 
 func isProperPair(r *sam.Record) bool {
-    return strings.Contains(r.Flags.String(), "P")
+	return strings.Contains(r.Flags.String(), "P")
 }
 
 func isOnlyMatched(r *sam.Record) bool {
