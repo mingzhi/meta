@@ -1,6 +1,7 @@
 package main
 
 import (
+    "strings"
 	"github.com/biogo/hts/sam"
 )
 
@@ -46,7 +47,7 @@ func FilterReads(input chan *sam.Record) (output chan *sam.Record) {
 }
 
 func isProperPair(r *sam.Record) bool {
-	return r.Flags == sam.ProperPair
+    return strings.Contains(r.Flags.String(), "P")
 }
 
 func isOnlyMatched(r *sam.Record) bool {
@@ -60,9 +61,9 @@ func isOverlapMatched(r, mate *sam.Record) bool {
 	s1, _ := Map2Ref(r)
 	s2, _ := Map2Ref(mate)
 	matched := true
-	for i := 0; i < mate.Len(); i++ {
+	for i := 0; i < len(s2); i++ {
 		j := mate.Pos - r.Pos + i
-		if j >= r.Len() {
+		if j >= len(s1) {
 			break
 		}
 
