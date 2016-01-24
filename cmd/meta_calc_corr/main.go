@@ -79,8 +79,10 @@ func main() {
 
 	// Read mapping records in sam formate from the .bam file.
 	_, samRecordChan := ReadBamFile(bamFileName)
+	// Filter reads
+	filteredRecordChan := FilterReads(samRecordChan)
 	// Pileup the mapped bases for each genomic position.
-	snpChan := Pileup(samRecordChan)
+	snpChan := Pileup(filteredRecordChan)
 	// Using the pileup data for correlation calculation.
 	positionType := convertPosType(pos)
 	cChan := Calc(snpChan, profile, positionType, maxl)
