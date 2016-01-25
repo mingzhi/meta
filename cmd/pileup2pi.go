@@ -55,17 +55,18 @@ type Pi struct {
 	Genome   string
 	Position int
 	Pi       float64
+	Num      int
 }
 
 // Calc Pi from each snp.
 func CalcPi(snp SNP) (pi Pi) {
 	pi.Genome = snp.Genome
 	pi.Position = snp.Position
-	pi.Pi = calcPi(snp.ReadBases)
+	pi.Pi, pi.Num = calcPi(snp.ReadBases)
 	return pi
 }
 
-func calcPi(bases []byte) (pi float64) {
+func calcPi(bases []byte) (pi float64, n int) {
 	// convert bases to upper case.
 	upperBases := bytes.ToUpper(bases)
 
@@ -91,7 +92,7 @@ func calcPi(bases []byte) (pi float64) {
 	}
 
 	pi = float64(cross) / float64(total*(total-1)/2)
-
+	n = total
 	return
 }
 
