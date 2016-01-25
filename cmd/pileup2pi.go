@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"github.com/mingzhi/gomath/stat/desc"
 	"io"
 	"log"
 	"os"
@@ -67,26 +66,28 @@ func calcPi(bases []byte) (pi float64) {
 	// convert bases to upper case.
 	upperBases := bytes.ToUpper(bases)
 
-	mean := desc.NewMean()
+	m := make(map[byte]int)
 	for i := 0; i < len(upperBases); i++ {
-		if upperBases[i] == '*' {
-			continue
-		}
-
-		for j := i + 1; j < len(upperBases); j++ {
-			if upperBases[j] == '*' {
-				continue
-			}
-
-			if upperBases[i] != upperBases[j] {
-				mean.Increment(1.0)
-			} else {
-				mean.Increment(0.0)
-			}
+		if upperBases[i] != '*' {
+			m[upperBases[i]]++
 		}
 	}
 
-	pi = mean.GetResult()
+	total := 0
+	nums := []int{}
+	for _, n := range m {
+		total += n
+		nums = append(nums, n)
+	}
+
+	cross := 0
+	for i := 0; i < len(nums); i++ {
+		for j := i + 1; j < len(nums); j++ {
+			cross += nums[i] * nums[j]
+		}
+	}
+
+	pi = float64(cross) / float64(total*(total-1)/2)
 
 	return
 }
