@@ -44,7 +44,7 @@ func main() {
 	// Read pi.
 	piArr := readPi(piFile)
 	posType := convertPosType(pos)
-	covs, ns := CalcCr(piArr, profile, posType, maxl)
+	covs := CalcCr(piArr, profile, posType, maxl)
 
 	w, err := os.Create(outFile)
 	if err != nil {
@@ -53,7 +53,7 @@ func main() {
 	defer w.Close()
 
 	for i := 0; i < len(covs); i++ {
-		w.WriteString(fmt.Sprintf("%d\t%g\t%d\n", i, covs[i], ns[i]))
+		w.WriteString(fmt.Sprintf("%d\t%g\t%g\t%g\t%d\n", i, covs[i].GetResult(), covs[i].MeanX(), covs[i].MeanY(), covs[i].GetN()))
 	}
 }
 
@@ -104,8 +104,13 @@ func readPi(filename string) []Pi {
 	}
 	defer f.Close()
 	decoder := json.NewDecoder(f)
-	if err := decoder.Decode(&piArr); err != nil {
-		log.Fatalln(err)
+	var pi Pi
+	for decoder.More() {
+		err := decoder.Decode(&pi)
+		if err != nil {
+			log.Fatal(err)
+		}
+		piArr = append(piArr, pi)
 	}
 	return piArr
 }
@@ -140,9 +145,17 @@ type Pi struct {
 	Pi       float64
 }
 
+type Covariance interface {
+	GetN() int
+	GetResult() float64
+	MeanX() float64
+	MeanY() float64
+	Increment(x, y float64)
+}
+
 // Calculate covariance of rates.
-func CalcCr(pis []Pi, profile []profiling.Pos, posType byte, maxl int) (covs []float64, n []int) {
-	corrs := make([]*correlation.BivariateCovariance, maxl)
+func CalcCr(pis []Pi, profile []profiling.Pos, posType byte, maxl int) (covs []Covariance) {
+	corrs := make([]Covariance, maxl)
 	for i := 0; i < maxl; i++ {
 		corrs[i] = correlation.NewBivariateCovariance(false)
 	}
@@ -154,7 +167,7 @@ func CalcCr(pis []Pi, profile []profiling.Pos, posType byte, maxl int) (covs []f
 				pos2 := profile[pis[j].Position-1]
 
 				distance := pis[j].Position - pis[i].Position
-				if distance > maxl {
+				if distance >= maxl {
 					break
 				}
 
@@ -166,11 +179,7 @@ func CalcCr(pis []Pi, profile []profiling.Pos, posType byte, maxl int) (covs []f
 
 	}
 
-	for i := 0; i < maxl; i++ {
-		covs = append(covs, corrs[i].GetResult())
-		n = append(n, corrs[i].GetN())
-	}
-
+	covs = corrs
 	return
 }
 

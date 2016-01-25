@@ -5,7 +5,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"flag"
-	"fmt"
 	"io"
 	"log"
 	"math"
@@ -31,23 +30,23 @@ func main() {
 	}
 	defer f.Close()
 
-	snpChan := DecodePileup(f)
-	piArr := []Pi{}
-	for s := range snpChan {
-		pi := CalcPi(s)
-		if !math.IsNaN(pi.Pi) {
-			piArr = append(piArr, pi)
-		}
-	}
-
+	// Create output file.
 	w, err := os.Create(outfile)
 	if err != nil {
 		log.Fatalln(err)
 	}
 	defer w.Close()
 	encoder := json.NewEncoder(w)
-	if err := encoder.Encode(piArr); err != nil {
-		log.Fatalln(err)
+
+	snpChan := DecodePileup(f)
+	for s := range snpChan {
+		pi := CalcPi(s)
+		if !math.IsNaN(pi.Pi) {
+			err := encoder.Encode(pi)
+			if err != nil {
+				log.Fatalln(err)
+			}
+		}
 	}
 }
 
@@ -56,24 +55,26 @@ type Pi struct {
 	Position int
 	Pi       float64
 	Num      int
+	Alleles  map[string]int
 }
 
 // Calc Pi from each snp.
 func CalcPi(snp SNP) (pi Pi) {
 	pi.Genome = snp.Genome
 	pi.Position = snp.Position
-	pi.Pi, pi.Num = calcPi(snp.ReadBases)
+	pi.Pi, pi.Num, pi.Alleles = calcPi(snp.ReadBases)
 	return pi
 }
 
-func calcPi(bases []byte) (pi float64, n int) {
+func calcPi(bases []byte) (pi float64, n int, m map[string]int) {
 	// convert bases to upper case.
 	upperBases := bytes.ToUpper(bases)
 
-	m := make(map[byte]int)
+	m = make(map[string]int)
 	for i := 0; i < len(upperBases); i++ {
 		if upperBases[i] != '*' {
-			m[upperBases[i]]++
+			b := string(upperBases[i])
+			m[b]++
 		}
 	}
 
@@ -128,10 +129,10 @@ func DecodePileup(r io.Reader) (snpChan chan SNP) {
 			snp.RefBase = terms[2][0]
 			snp.Number = str2int(terms[3])
 			if snp.Number > 0 {
-				snp.ReadBases = decodeReadBases(terms[4])
+				snp.ReadBases = decodeReadBases(terms[4], snp.RefBase)
 				snp.BaseQuals = decodeBaseQual(terms[5])
 				if snp.Number != len(snp.ReadBases) || snp.Number != len(snp.BaseQuals) {
-					fmt.Printf("%d\t%s\n", snp.Number, string(snp.ReadBases))
+					log.Printf("SNP number and length of bases did not matched: Position %d, Number %d, Bases %s\n", snp.Position, snp.Number, string(snp.ReadBases))
 				} else {
 					snp.ReadBases = filterBases(snp.ReadBases, snp.BaseQuals, 30)
 					snpChan <- snp
@@ -165,7 +166,7 @@ func readLine(reader *bufio.Reader) (line string, endOfFile bool) {
 	return
 }
 
-func decodeReadBases(s string) []byte {
+func decodeReadBases(s string, ref byte) []byte {
 	r := regexp.MustCompile("\\^.")
 	s = r.ReplaceAllString(s, "")
 	s = strings.Replace(s, "$", "", -1)
@@ -193,10 +194,22 @@ func decodeReadBases(s string) []byte {
 
 	r3 := regexp.MustCompile("[0-9]+")
 	if r3.MatchString(s) {
-		fmt.Println(s)
+		log.Printf("Bases still contains number: %s\n", s)
 	}
 
-	return []byte(s)
+	bases := []byte{}
+	for i := 0; i < len(s); i++ {
+		b := s[i]
+		if b == '.' || b == ',' {
+			bases = append(bases, ref)
+		} else {
+			bases = append(bases, b)
+		}
+	}
+
+	bases = bytes.ToUpper(bases)
+
+	return bases
 }
 
 func decodeBaseQual(s string) []int {

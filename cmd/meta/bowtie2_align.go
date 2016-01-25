@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"github.com/mingzhi/meta/strain"
 	"os"
 	"os/exec"
@@ -96,7 +97,7 @@ func (cmd *cmdAlignReads) align(strain strain.Strain) {
 		genomeIndexBase := filepath.Join(cmd.refBase, strain.Path, g.RefAcc())
 		outFilePrefix := filepath.Join(outPath, g.RefAcc())
 		samOutFilePath := outFilePrefix + bowtiedSamAppendix
-		options = append(options, []string{"-p", *cmd.ncpu})
+		options = append(options, []string{"-p", fmt.Sprintf("%d", *cmd.ncpu)}...)
 		options = append(options, []string{"-x", genomeIndexBase}...)
 		options = append(options, []string{"-1", cmd.pairedEndReadFile1}...)
 		options = append(options, []string{"-2", cmd.pairedEndReadFile2}...)
