@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math"
 	"os"
 	"regexp"
 	"strconv"
@@ -34,7 +35,9 @@ func main() {
 	piArr := []Pi{}
 	for s := range snpChan {
 		pi := CalcPi(s)
-		piArr = append(piArr, pi)
+		if !math.IsNaN(pi.Pi) {
+			piArr = append(piArr, pi)
+		}
 	}
 
 	w, err := os.Create(outfile)
