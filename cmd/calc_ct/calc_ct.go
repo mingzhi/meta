@@ -158,11 +158,11 @@ func calc(subProfileChan chan SubProfile, profile []profiling.Pos, posType byte,
 
 			for subProfile := range subProfileChan {
 				for i := 0; i < len(subProfile.Profile); i++ {
-					pos1 := subProfile.Pos + i - 1
+					pos1 := subProfile.Pos + i
 					x := subProfile.Profile[i]
 					if checkPosType(posType, profile[pos1].Type) {
 						for j := i; j < len(subProfile.Profile); j++ {
-							pos2 := subProfile.Pos + j - 1
+							pos2 := subProfile.Pos + j
 							l := pos2 - pos1
 							if l >= len(covs) {
 								break
