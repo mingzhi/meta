@@ -80,8 +80,10 @@ func main() {
 // slideReads
 func slideReads(readChan chan *sam.Record) chan SubProfile {
 	subProfileChan := make(chan SubProfile)
+
+	mappedReadArrChan := make(chan []MappedRead)
 	go func() {
-		defer close(subProfileChan)
+		defer close(mappedReadArrChan)
 		mappedReadArr := []MappedRead{}
 		for r := range readChan {
 			current := MappedRead{}
@@ -91,13 +93,36 @@ func slideReads(readChan chan *sam.Record) chan SubProfile {
 			if len(mappedReadArr) > 0 {
 				a := mappedReadArr[0]
 				if a.Pos+a.Len() < current.Pos {
+					mappedReadArrChan <- mappedReadArr
 					mappedReadArr = mappedReadArr[1:]
-					for _, b := range mappedReadArr {
-						subProfile := compareMappedReads(a, b)
-						subProfileChan <- subProfile
-					}
 				}
 			}
+		}
+	}()
+
+	ncpu := runtime.GOMAXPROCS(0)
+	done := make(chan bool)
+	for i := 0; i < ncpu; i++ {
+		go func() {
+			for mappedReadArr := range mappedReadArrChan {
+				a := mappedReadArr[0]
+				mappedReadArr = mappedReadArr[1:]
+				for _, b := range mappedReadArr {
+					if b.Pos > a.Len()+a.Pos {
+						break
+					}
+					subProfile := compareMappedReads(a, b)
+					subProfileChan <- subProfile
+				}
+			}
+			done <- true
+		}()
+	}
+
+	go func() {
+		defer close(subProfileChan)
+		for i := 0; i < ncpu; i++ {
+			<-done
 		}
 	}()
 
@@ -133,11 +158,11 @@ func calc(subProfileChan chan SubProfile, profile []profiling.Pos, posType byte,
 
 			for subProfile := range subProfileChan {
 				for i := 0; i < len(subProfile.Profile); i++ {
-					pos1 := subProfile.Pos + i
+					pos1 := subProfile.Pos + i - 1
 					x := subProfile.Profile[i]
 					if checkPosType(posType, profile[pos1].Type) {
 						for j := i; j < len(subProfile.Profile); j++ {
-							pos2 := subProfile.Pos + j
+							pos2 := subProfile.Pos + j - 1
 							l := pos2 - pos1
 							if l >= len(covs) {
 								break
