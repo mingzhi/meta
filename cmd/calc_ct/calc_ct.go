@@ -14,6 +14,7 @@ import (
 	"log"
 	"math"
 	"os"
+	"runtime"
 )
 
 // MappedRead contains the section of a read mapped to a reference genome.
@@ -26,14 +27,6 @@ type MappedRead struct {
 type SubProfile struct {
 	Pos     int
 	Profile []float64
-}
-
-type Covariance interface {
-	GetN() int
-	GetResult() float64
-	MeanX() float64
-	MeanY() float64
-	Increment(x, y float64)
 }
 
 func (m MappedRead) Len() int {
@@ -49,10 +42,12 @@ func main() {
 	var maxl int            // max length of correlation
 	var pos int             // position for calculation
 	var codonTableID string // codon table ID
+	var ncpu int            // number of CPUs
 	// Parse command arguments.
 	flag.IntVar(&maxl, "maxl", 100, "max length of correlations")
 	flag.IntVar(&pos, "pos", 4, "position")
 	flag.StringVar(&codonTableID, "codon", "11", "codon table ID")
+	flag.IntVar(&ncpu, "ncpu", runtime.NumCPU(), "number of CPU for using")
 	flag.Parse()
 	// Print usage if the number of arguments is not satisfied.
 	if flag.NArg() < 4 {
@@ -62,6 +57,7 @@ func main() {
 	genomeFile = flag.Arg(1)
 	gffFile = flag.Arg(2)
 	outFile = flag.Arg(3)
+	runtime.GOMAXPROCS(ncpu)
 
 	// Profile genome.
 	// We need:
@@ -77,11 +73,7 @@ func main() {
 	_, readChan := readBamFile(bamFile)
 	subProfileChan := slideReads(readChan)
 	posType := convertPosType(pos)
-	covs := []Covariance{}
-	for i := 0; i < maxl; i++ {
-		covs = append(covs, correlation.NewBivariateCovariance(false))
-	}
-	calc(subProfileChan, covs, profile, posType)
+	covs := calc(subProfileChan, profile, posType, maxl)
 	write(covs, outFile)
 }
 
@@ -129,33 +121,58 @@ func compareMappedReads(a, b MappedRead) SubProfile {
 }
 
 // calc
-func calc(subProfileChan chan SubProfile, covs []Covariance, profile []profiling.Pos, posType byte) {
-	for subProfile := range subProfileChan {
-		for i := 0; i < len(subProfile.Profile); i++ {
-			pos1 := subProfile.Pos + i
-			x := subProfile.Profile[i]
-			if checkPosType(posType, profile[pos1].Type) {
-				for j := i; j < len(subProfile.Profile); j++ {
-					pos2 := subProfile.Pos + j
-					l := pos2 - pos1
-					if l >= len(covs) {
-						break
-					} else {
-						y := subProfile.Profile[j]
-						if checkPosType(posType, profile[pos2].Type) {
-							covs[l].Increment(x, y)
+func calc(subProfileChan chan SubProfile, profile []profiling.Pos, posType byte, maxl int) (covs []*correlation.BivariateCovariance) {
+	ncpu := runtime.GOMAXPROCS(0)
+	covsChan := make(chan []*correlation.BivariateCovariance)
+	for i := 0; i < ncpu; i++ {
+		go func() {
+			covs := []*correlation.BivariateCovariance{}
+			for i := 0; i < maxl; i++ {
+				covs = append(covs, correlation.NewBivariateCovariance(false))
+			}
+
+			for subProfile := range subProfileChan {
+				for i := 0; i < len(subProfile.Profile); i++ {
+					pos1 := subProfile.Pos + i
+					x := subProfile.Profile[i]
+					if checkPosType(posType, profile[pos1].Type) {
+						for j := i; j < len(subProfile.Profile); j++ {
+							pos2 := subProfile.Pos + j
+							l := pos2 - pos1
+							if l >= len(covs) {
+								break
+							} else {
+								y := subProfile.Profile[j]
+								if checkPosType(posType, profile[pos2].Type) {
+									covs[l].Increment(x, y)
+								}
+							}
+
 						}
 					}
 
 				}
 			}
+			covsChan <- covs
+		}()
+	}
 
+	for i := 0; i < ncpu; i++ {
+		covs1 := <-covsChan
+		if len(covs) == 0 {
+			covs = covs1
+		} else {
+			for i := 0; i < maxl; i++ {
+				covs[i].Append(covs1[i])
+			}
 		}
 	}
+
+	return
 }
 
 // write
-func write(covs []Covariance, filename string) {
+func write(covs []*correlation.BivariateCovariance, filename string) {
 	w, err := os.Create(filename)
 	if err != nil {
 		log.Fatal(err)
