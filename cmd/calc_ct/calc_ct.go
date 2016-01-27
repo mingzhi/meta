@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"flag"
 	"fmt"
 	"github.com/biogo/hts/bam"
@@ -33,6 +34,8 @@ func (m MappedRead) Len() int {
 	return len(m.Seq)
 }
 
+var MINBQ int
+
 func main() {
 	// Command variables.
 	var bamFile string      // bam or sam file
@@ -48,6 +51,7 @@ func main() {
 	flag.IntVar(&pos, "pos", 4, "position")
 	flag.StringVar(&codonTableID, "codon", "11", "codon table ID")
 	flag.IntVar(&ncpu, "ncpu", runtime.NumCPU(), "number of CPU for using")
+	flag.IntVar(&MINBQ, "min-bq", 13, "min base quality")
 	flag.Parse()
 	// Print usage if the number of arguments is not satisfied.
 	if flag.NArg() < 4 {
@@ -136,13 +140,33 @@ func compareMappedReads(a, b MappedRead) SubProfile {
 	lag := b.Pos - a.Pos
 	for j := 0; j < a.Len()-lag && j < b.Len(); j++ {
 		i := j + lag
-		d := 0.0
-		if a.Seq[i] != b.Seq[j] {
-			d = 1.0
+		d := math.NaN()
+		if isATGC(a.Seq[i]) && isATGC(b.Seq[j]) {
+			if int(a.Qual[i]) > MINBQ && int(b.Qual[j]) > MINBQ {
+				if a.Seq[i] != b.Seq[j] {
+					d = 1.0
+				} else {
+					d = 0.0
+				}
+			}
 		}
 		subs = append(subs, d)
 	}
 	return SubProfile{Pos: b.Pos, Profile: subs}
+}
+
+func isATGC(b byte) bool {
+	if b == 'A' {
+		return true
+	} else if b == 'T' {
+		return true
+	} else if b == 'C' {
+		return true
+	} else if b == 'G' {
+		return true
+	}
+
+	return false
 }
 
 // calc
@@ -326,7 +350,6 @@ func Map2Ref(r *sam.Record) (s []byte, q []byte) {
 			p += c.Len()
 		case sam.CigarInsertion, sam.CigarSoftClipped, sam.CigarHardClipped:
 			p += c.Len()
-
 		case sam.CigarDeletion, sam.CigarSkipped:
 			for i := 0; i < c.Len(); i++ {
 				s = append(s, '*')
@@ -334,6 +357,8 @@ func Map2Ref(r *sam.Record) (s []byte, q []byte) {
 			}
 		}
 	}
+
+	s = bytes.ToUpper(s)
 
 	return
 }
