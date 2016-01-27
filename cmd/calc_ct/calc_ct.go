@@ -184,7 +184,7 @@ func calc(subProfileChan chan SubProfile, profile []profiling.Pos, posType byte,
 				for i := 0; i < len(subProfile.Profile); i++ {
 					pos1 := subProfile.Pos + i
 					x := subProfile.Profile[i]
-					if checkPosType(posType, profile[pos1].Type) {
+					if checkPosType(posType, profile[pos1].Type) && !math.IsNaN(x) {
 						for j := i; j < len(subProfile.Profile); j++ {
 							pos2 := subProfile.Pos + j
 							l := pos2 - pos1
@@ -192,7 +192,7 @@ func calc(subProfileChan chan SubProfile, profile []profiling.Pos, posType byte,
 								break
 							} else {
 								y := subProfile.Profile[j]
-								if checkPosType(posType, profile[pos2].Type) {
+								if checkPosType(posType, profile[pos2].Type) && !math.IsNaN(y) {
 									covs[l].Increment(x, y)
 								}
 							}
