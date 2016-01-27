@@ -104,6 +104,8 @@ func slideReads(readChan chan *sam.Record) chan SubProfile {
 						mappedReadArr = mappedReadArr[1:]
 					}
 				}
+			} else {
+				log.Printf("Discard: %v\n", r)
 			}
 		}
 	}()
