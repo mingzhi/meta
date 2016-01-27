@@ -92,7 +92,7 @@ func slideReads(readChan chan *sam.Record) chan SubProfile {
 		defer close(mappedReadArrChan)
 		mappedReadArr := []MappedRead{}
 		for r := range readChan {
-			if int(r.MapQ) > MINMQ {
+			if int(r.MapQ) > MINMQ && int(r.MapQ) < 51 {
 				current := MappedRead{}
 				current.Pos = r.Pos
 				current.Seq, current.Qual = Map2Ref(r)
