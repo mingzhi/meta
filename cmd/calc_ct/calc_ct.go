@@ -35,6 +35,7 @@ func (m MappedRead) Len() int {
 }
 
 var MINBQ int
+var MINMQ int
 
 func main() {
 	// Command variables.
@@ -52,6 +53,7 @@ func main() {
 	flag.StringVar(&codonTableID, "codon", "11", "codon table ID")
 	flag.IntVar(&ncpu, "ncpu", runtime.NumCPU(), "number of CPU for using")
 	flag.IntVar(&MINBQ, "min-bq", 13, "min base quality")
+	flag.IntVar(&MINMQ, "min-mq", 0, "min map quality")
 	flag.Parse()
 	// Print usage if the number of arguments is not satisfied.
 	if flag.NArg() < 4 {
@@ -90,15 +92,17 @@ func slideReads(readChan chan *sam.Record) chan SubProfile {
 		defer close(mappedReadArrChan)
 		mappedReadArr := []MappedRead{}
 		for r := range readChan {
-			current := MappedRead{}
-			current.Pos = r.Pos
-			current.Seq, current.Qual = Map2Ref(r)
-			mappedReadArr = append(mappedReadArr, current)
-			if len(mappedReadArr) > 0 {
-				a := mappedReadArr[0]
-				if a.Pos+a.Len() < current.Pos {
-					mappedReadArrChan <- mappedReadArr
-					mappedReadArr = mappedReadArr[1:]
+			if int(r.MapQ) > MINMQ {
+				current := MappedRead{}
+				current.Pos = r.Pos
+				current.Seq, current.Qual = Map2Ref(r)
+				mappedReadArr = append(mappedReadArr, current)
+				if len(mappedReadArr) > 0 {
+					a := mappedReadArr[0]
+					if a.Pos+a.Len() < current.Pos {
+						mappedReadArrChan <- mappedReadArr
+						mappedReadArr = mappedReadArr[1:]
+					}
 				}
 			}
 		}
