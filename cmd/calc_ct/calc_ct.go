@@ -9,6 +9,7 @@ import (
 	"github.com/mingzhi/biogo/feat/gff"
 	"github.com/mingzhi/biogo/seq"
 	"github.com/mingzhi/gomath/stat/correlation"
+	"github.com/mingzhi/gomath/stat/desc/meanvar"
 	"github.com/mingzhi/ncbiftp/genomes/profiling"
 	"github.com/mingzhi/ncbiftp/taxonomy"
 	"io"
@@ -36,6 +37,7 @@ func (m MappedRead) Len() int {
 
 var MINBQ int
 var MINMQ int
+var SAMPLES int
 
 func main() {
 	// Command variables.
@@ -54,6 +56,7 @@ func main() {
 	flag.IntVar(&ncpu, "ncpu", runtime.NumCPU(), "number of CPU for using")
 	flag.IntVar(&MINBQ, "min-bq", 13, "min base quality")
 	flag.IntVar(&MINMQ, "min-mq", 0, "min map quality")
+	flag.IntVar(&SAMPLES, "samples", 100, "number of samples")
 	flag.Parse()
 	// Print usage if the number of arguments is not satisfied.
 	if flag.NArg() < 4 {
@@ -79,8 +82,9 @@ func main() {
 	_, readChan := readBamFile(bamFile)
 	subProfileChan := slideReads(readChan)
 	posType := convertPosType(pos)
-	covs := calc(subProfileChan, profile, posType, maxl)
-	write(covs, outFile)
+	covsChan := calc(subProfileChan, profile, posType, maxl)
+	meanVars := collect(covsChan, maxl)
+	write(meanVars, outFile)
 }
 
 // slideReads
@@ -182,10 +186,10 @@ func isATGC(b byte) bool {
 }
 
 // calc
-func calc(subProfileChan chan SubProfile, profile []profiling.Pos, posType byte, maxl int) (covs []*correlation.BivariateCovariance) {
-	ncpu := runtime.GOMAXPROCS(0)
-	covsChan := make(chan []*correlation.BivariateCovariance)
-	for i := 0; i < ncpu; i++ {
+func calc(subProfileChan chan SubProfile, profile []profiling.Pos, posType byte, maxl int) (covsChan chan []*correlation.BivariateCovariance) {
+	covsChan = make(chan []*correlation.BivariateCovariance)
+	done := make(chan bool)
+	for i := 0; i < SAMPLES; i++ {
 		go func() {
 			covs := []*correlation.BivariateCovariance{}
 			for i := 0; i < maxl; i++ {
@@ -215,16 +219,33 @@ func calc(subProfileChan chan SubProfile, profile []profiling.Pos, posType byte,
 				}
 			}
 			covsChan <- covs
+			done <- true
 		}()
 	}
 
-	for i := 0; i < ncpu; i++ {
-		covs1 := <-covsChan
-		if len(covs) == 0 {
-			covs = covs1
-		} else {
-			for i := 0; i < maxl; i++ {
-				covs[i].Append(covs1[i])
+	go func() {
+		defer close(covsChan)
+		for i := 0; i < SAMPLES; i++ {
+			<-done
+		}
+	}()
+
+	return
+}
+
+// collect
+func collect(covsChan chan []*correlation.BivariateCovariance, maxl int) (meanVars []*meanvar.MeanVar) {
+	meanVars = []*meanvar.MeanVar{}
+	for i := 0; i < maxl; i++ {
+		meanVars = append(meanVars, meanvar.New())
+	}
+
+	for covs := range covsChan {
+		for i := range covs {
+			c := covs[i]
+			v := c.GetResult()
+			if !math.IsNaN(v) {
+				meanVars[i].Increment(v)
 			}
 		}
 	}
@@ -233,17 +254,18 @@ func calc(subProfileChan chan SubProfile, profile []profiling.Pos, posType byte,
 }
 
 // write
-func write(covs []*correlation.BivariateCovariance, filename string) {
+func write(meanVars []*meanvar.MeanVar, filename string) {
 	w, err := os.Create(filename)
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer w.Close()
 
-	for i := 0; i < len(covs); i++ {
-		v := covs[i].GetResult()
-		n := covs[i].GetN()
-		w.WriteString(fmt.Sprintf("%d\t%g\t%d\n", i, v, n))
+	for i := 0; i < len(meanVars); i++ {
+		m := meanVars[i].Mean.GetResult()
+		v := meanVars[i].Var.GetResult()
+		n := meanVars[i].Mean.GetN()
+		w.WriteString(fmt.Sprintf("%d\t%g\t%d\n", i, m, v, n))
 	}
 }
 
