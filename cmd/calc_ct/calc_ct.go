@@ -265,7 +265,7 @@ func write(meanVars []*meanvar.MeanVar, filename string) {
 		m := meanVars[i].Mean.GetResult()
 		v := meanVars[i].Var.GetResult()
 		n := meanVars[i].Mean.GetN()
-		w.WriteString(fmt.Sprintf("%d\t%g\t%d\n", i, m, v, n))
+		w.WriteString(fmt.Sprintf("%d\t%g\t%g\t%d\n", i, m, v, n))
 	}
 }
 
