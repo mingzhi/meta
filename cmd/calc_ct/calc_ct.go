@@ -90,6 +90,9 @@ func slideReads(readChan chan *sam.Record) chan SubProfile {
 	mappedReadArrChan := make(chan []MappedRead)
 	go func() {
 		defer close(mappedReadArrChan)
+
+		totalDiscards := 0
+		totalUsed := 0
 		mappedReadArr := []MappedRead{}
 		for r := range readChan {
 			if int(r.MapQ) > MINMQ && int(r.MapQ) < 51 {
@@ -104,10 +107,13 @@ func slideReads(readChan chan *sam.Record) chan SubProfile {
 						mappedReadArr = mappedReadArr[1:]
 					}
 				}
+				totalUsed++
 			} else {
-				log.Printf("Discard: %v\n", r)
+				totalDiscards++
 			}
 		}
+		log.Printf("Total discard reads: %d\n", totalDiscards)
+		log.Printf("Total used reads: %d\n", totalUsed)
 	}()
 
 	ncpu := runtime.GOMAXPROCS(0)
