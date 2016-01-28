@@ -237,9 +237,7 @@ func write(covs []*correlation.BivariateCovariance, filename string) {
 	for i := 0; i < len(covs); i++ {
 		v := covs[i].GetResult()
 		n := covs[i].GetN()
-		if n > 0 && !math.IsNaN(v) {
-			w.WriteString(fmt.Sprintf("%d\t%g\t%d\n", i, v, n))
-		}
+		w.WriteString(fmt.Sprintf("%d\t%g\t%d\n", i, v, n))
 	}
 }
 
