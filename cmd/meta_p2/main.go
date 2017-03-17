@@ -169,7 +169,7 @@ func compareMappedReads(a, b MappedRead, codeTable *taxonomy.GeneticCode) SubPro
 		i := j + lag
 		d := math.NaN()
 		pos := j + b.Pos
-		if (pos)%3 == 0 && j > 1 {
+		if (pos+1)%3 == 0 && j > 1 {
 			if isATGC(a.Seq[i]) && isATGC(b.Seq[j]) {
 				if int(a.Qual[i]) > MINBQ && int(b.Qual[j]) > MINBQ {
 					codonA := string(a.Seq[i-2 : i+1])
