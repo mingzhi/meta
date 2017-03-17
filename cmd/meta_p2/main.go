@@ -104,6 +104,7 @@ func main() {
 	}()
 
 	numJob := len(refs)
+	log.Printf("Number of references: %d\n", numJob)
 	meanVars := collect(covsChan, maxl, numJob)
 	write(meanVars, outFile)
 }
@@ -272,6 +273,9 @@ func write(meanVars []*meanvar.MeanVar, filename string) {
 		m := meanVars[i].Mean.GetResult()
 		v := meanVars[i].Var.GetResult()
 		n := meanVars[i].Mean.GetN()
+		if n == 0 || math.IsNaN(v) {
+			continue
+		}
 		t := "P2"
 		if i == 0 {
 			t = "Ks"
