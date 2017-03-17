@@ -184,9 +184,8 @@ func compareMappedReads(a, b MappedRead, codeTable *taxonomy.GeneticCode) SubPro
 					}
 				}
 			}
-			subs = append(subs, d)
 		}
-
+		subs = append(subs, d)
 	}
 	return SubProfile{Pos: b.Pos, Profile: subs}
 }
@@ -214,24 +213,16 @@ func calc(subProfileChan chan SubProfile, maxl int) (covs []*correlation.Bivaria
 
 	for subProfile := range subProfileChan {
 		for i := 0; i < len(subProfile.Profile); i++ {
-			pos1 := subProfile.Pos + i
 			x := subProfile.Profile[i]
 			if !math.IsNaN(x) {
 				for j := i; j < len(subProfile.Profile); j++ {
-					pos2 := subProfile.Pos + j
-					l := pos2 - pos1
-					if l >= len(covs) {
-						break
-					} else {
-						y := subProfile.Profile[j]
-						if !math.IsNaN(y) {
-							covs[l].Increment(x, y)
-						}
+					l := j - i
+					y := subProfile.Profile[j]
+					if !math.IsNaN(y) {
+						covs[l].Increment(x, y)
 					}
-
 				}
 			}
-
 		}
 	}
 	return
@@ -361,7 +352,6 @@ func readBamFile(fileName string) (refs []*sam.Reference, c chan []*sam.Record) 
 		if len(records) > 0 {
 			c <- records
 		}
-		log.Println("Finished reading bam file!")
 	}()
 
 	return nil, c
