@@ -2,7 +2,6 @@ package main
 
 import (
 	"bytes"
-	"flag"
 	"fmt"
 	"io"
 	"log"
@@ -15,6 +14,8 @@ import (
 	"github.com/mingzhi/gomath/stat/correlation"
 	"github.com/mingzhi/gomath/stat/desc/meanvar"
 	"github.com/mingzhi/ncbiftp/taxonomy"
+	"gopkg.in/alecthomas/kingpin.v2"
+	"gopkg.in/cheggaaa/pb.v1"
 )
 
 // MappedRead contains the section of a read mapped to a reference genome.
@@ -41,30 +42,44 @@ var MINBQ int
 // MINMQ min mapping quality
 var MINMQ int
 
+// ShowProgress show progress.
+var ShowProgress bool
+
 func main() {
+
 	// Command variables.
-	var bamFile string      // bam or sam file
-	var outFile string      // output file
-	var maxl int            // max length of correlation
-	var codonTableID string // codon table ID
-	var ncpu int            // number of CPUs
+	var bamFile string // bam or sam file
+	var outFile string // output file
+	var maxl int       // max length of correlation
+	var ncpu int       // number of CPUs
 	// Parse command arguments.
-	flag.IntVar(&maxl, "maxl", 100, "max length of correlations")
-	flag.StringVar(&codonTableID, "codon", "11", "codon table ID")
-	flag.IntVar(&ncpu, "ncpu", runtime.NumCPU(), "number of CPU for using")
-	flag.IntVar(&MINBQ, "min-bq", 13, "min base quality")
-	flag.IntVar(&MINMQ, "min-mq", 0, "min map quality")
-	flag.Parse()
-	// Print usage if the number of arguments is not satisfied.
-	if flag.NArg() < 2 {
-		log.Fatalln("Usage: go run calc_cr.go <pi file> <genome file> <gff file> <out file>")
+	app := kingpin.New("meta_p2", "Calculate mutation correlation from bacterial metagenomic sequence data")
+	app.Version("v0.1")
+	bamFileArg := app.Arg("bamfile", "bam file").Required().String()
+	outFileArg := app.Arg("outfile", "out file").Required().String()
+	maxlFlag := app.Flag("maxl", "max len of correlations").Default("100").Int()
+	ncpuFlag := app.Flag("ncpu", "number of CPUs").Default("0").Int()
+	minBQFlag := app.Flag("minbq", "min base quality").Default("13").Int()
+	minMQFlag := app.Flag("minmq", "min mapping quality").Default("30").Int()
+	progressFlag := app.Flag("progress", "show progress").Default("false").Bool()
+	kingpin.MustParse(app.Parse(os.Args[1:]))
+
+	bamFile = *bamFileArg
+	outFile = *outFileArg
+	maxl = *maxlFlag
+	if *ncpuFlag == 0 {
+		ncpu = runtime.NumCPU()
+	} else {
+		ncpu = *ncpuFlag
 	}
-	bamFile = flag.Arg(0)
-	outFile = flag.Arg(1)
+	MINBQ = *minBQFlag
+	MINMQ = *minMQFlag
+	ShowProgress = *progressFlag
+
 	runtime.GOMAXPROCS(ncpu)
 
 	// Read sequence reads.
-	recordsChan := readBamFile(bamFile)
+	refs, recordsChan := readBamFile(bamFile)
 	codeTable := taxonomy.GeneticCodes()["11"]
 
 	done := make(chan bool)
@@ -88,7 +103,8 @@ func main() {
 		}
 	}()
 
-	meanVars := collect(covsChan, maxl)
+	numJob := len(refs)
+	meanVars := collect(covsChan, maxl, numJob)
 	write(meanVars, outFile)
 }
 
@@ -119,8 +135,6 @@ func slideReads(records []*sam.Record) chan []MappedRead {
 				totalDiscards++
 			}
 		}
-		log.Printf("Total discard reads: %d\n", totalDiscards)
-		log.Printf("Total used reads: %d\n", totalUsed)
 	}()
 
 	return mappedReadArrChan
@@ -193,7 +207,6 @@ func isATGC(b byte) bool {
 
 // calc
 func calc(subProfileChan chan SubProfile, maxl int) (covs []*correlation.BivariateCovariance) {
-
 	covs = []*correlation.BivariateCovariance{}
 	for i := 0; i < maxl; i++ {
 		covs = append(covs, correlation.NewBivariateCovariance(false))
@@ -226,10 +239,16 @@ func calc(subProfileChan chan SubProfile, maxl int) (covs []*correlation.Bivaria
 }
 
 // collect
-func collect(covsChan chan []*correlation.BivariateCovariance, maxl int) (meanVars []*meanvar.MeanVar) {
+func collect(covsChan chan []*correlation.BivariateCovariance, maxl, numJob int) (meanVars []*meanvar.MeanVar) {
 	meanVars = []*meanvar.MeanVar{}
 	for i := 0; i < maxl; i++ {
 		meanVars = append(meanVars, meanvar.New())
+	}
+
+	var pbar *pb.ProgressBar
+	if ShowProgress {
+		pbar = pb.StartNew(numJob)
+		defer pbar.Finish()
 	}
 
 	for covs := range covsChan {
@@ -239,6 +258,9 @@ func collect(covsChan chan []*correlation.BivariateCovariance, maxl int) (meanVa
 			if !math.IsNaN(v) {
 				meanVars[i].Increment(v)
 			}
+		}
+		if ShowProgress {
+			pbar.Increment()
 		}
 	}
 
@@ -253,12 +275,20 @@ func write(meanVars []*meanvar.MeanVar, filename string) {
 	}
 	defer w.Close()
 
-	w.WriteString("l,m,v,n\n")
+	w.WriteString("l,m,v,n,t,b\n")
+	ks := 0.0
 	for i := 0; i < len(meanVars); i++ {
 		m := meanVars[i].Mean.GetResult()
 		v := meanVars[i].Var.GetResult()
 		n := meanVars[i].Mean.GetN()
-		w.WriteString(fmt.Sprintf("%d,%g,%g,%d\n", i, m, v, n))
+		t := "P2"
+		if i == 0 {
+			t = "Ks"
+			ks = m
+		} else {
+			m = m / ks
+		}
+		w.WriteString(fmt.Sprintf("%d,%g,%g,%d,%s,all\n", i, m, v, n, t))
 	}
 }
 
@@ -269,9 +299,9 @@ type SamReader interface {
 }
 
 // ReadBamFile reads bam file, and return the header and a channel of sam records.
-func readBamFile(fileName string) chan []*sam.Record {
+func readBamFile(fileName string) (refs []*sam.Reference, c chan []*sam.Record) {
 	// Initialize the channel of sam records.
-	c := make(chan []*sam.Record)
+	c = make(chan []*sam.Record)
 
 	// Create a new go routine to read the records.
 	go func() {
@@ -299,6 +329,9 @@ func readBamFile(fileName string) chan []*sam.Record {
 				panic(err)
 			}
 		}
+
+		header := reader.Header()
+		refs = header.Refs()
 
 		// Read sam records and send them to the channel,
 		// until it hit an error, which raises a panic
@@ -331,7 +364,7 @@ func readBamFile(fileName string) chan []*sam.Record {
 		log.Println("Finished reading bam file!")
 	}()
 
-	return c
+	return nil, c
 }
 
 // Map2Ref Obtains a read mapping to the reference genome.
