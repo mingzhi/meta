@@ -215,7 +215,7 @@ func calc(subProfileChan chan SubProfile, maxl int) (covs []*correlation.Bivaria
 		for i := 0; i < len(subProfile.Profile); i++ {
 			x := subProfile.Profile[i]
 			if !math.IsNaN(x) {
-				for j := i; j < len(subProfile.Profile); j++ {
+				for j := i; j < len(subProfile.Profile) && j-i < len(covs); j++ {
 					l := j - i
 					y := subProfile.Profile[j]
 					if !math.IsNaN(y) {
