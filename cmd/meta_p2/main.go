@@ -11,7 +11,6 @@ import (
 
 	"github.com/biogo/hts/bam"
 	"github.com/biogo/hts/sam"
-	"github.com/mingzhi/gomath/stat/correlation"
 	"github.com/mingzhi/gomath/stat/desc/meanvar"
 	"github.com/mingzhi/ncbiftp/taxonomy"
 	"gopkg.in/alecthomas/kingpin.v2"
@@ -83,21 +82,21 @@ func main() {
 	codeTable := taxonomy.GeneticCodes()["11"]
 
 	done := make(chan bool)
-	covsChan := make(chan []*correlation.BivariateCovariance)
+	p2Chan := make(chan []P2)
 	for i := 0; i < ncpu; i++ {
 		go func() {
 			for records := range recordsChan {
 				readsChan := slideReads(records)
 				profileChan := compare(readsChan, codeTable)
-				covs := calc(profileChan, maxl)
-				covsChan <- covs
+				p2 := calc(profileChan, maxl)
+				p2Chan <- p2
 			}
 			done <- true
 		}()
 	}
 
 	go func() {
-		defer close(covsChan)
+		defer close(p2Chan)
 		for i := 0; i < ncpu; i++ {
 			<-done
 		}
@@ -105,7 +104,7 @@ func main() {
 
 	numJob := len(refs)
 	log.Printf("Number of references: %d\n", numJob)
-	meanVars := collect(covsChan, maxl, numJob)
+	meanVars := collect(p2Chan, maxl, numJob)
 	write(meanVars, outFile)
 }
 
@@ -119,22 +118,22 @@ func slideReads(records []*sam.Record) chan []MappedRead {
 		totalUsed := 0
 		mappedReadArr := []MappedRead{}
 		for _, r := range records {
-			if int(r.MapQ) > MINMQ && int(r.MapQ) < 51 {
-				current := MappedRead{}
-				current.Pos = r.Pos
-				current.Seq, current.Qual = Map2Ref(r)
-				mappedReadArr = append(mappedReadArr, current)
-				if len(mappedReadArr) > 0 {
-					a := mappedReadArr[0]
-					if a.Pos+a.Len() < current.Pos {
-						mappedReadArrChan <- mappedReadArr
-						mappedReadArr = mappedReadArr[1:]
-					}
-				}
-				totalUsed++
-			} else {
+			if r.MapQ != '*' && int(r.MapQ) < MINMQ {
 				totalDiscards++
+				continue
 			}
+			current := MappedRead{}
+			current.Pos = r.Pos
+			current.Seq, current.Qual = Map2Ref(r)
+			mappedReadArr = append(mappedReadArr, current)
+			if len(mappedReadArr) > 0 {
+				a := mappedReadArr[0]
+				if a.Pos+a.Len() < current.Pos {
+					mappedReadArrChan <- mappedReadArr
+					mappedReadArr = mappedReadArr[1:]
+				}
+			}
+			totalUsed++
 		}
 	}()
 
@@ -171,7 +170,7 @@ func compareMappedReads(a, b MappedRead, codeTable *taxonomy.GeneticCode) SubPro
 		pos := j + b.Pos
 		if (pos+1)%3 == 0 && j > 1 {
 			if isATGC(a.Seq[i]) && isATGC(b.Seq[j]) {
-				if int(a.Qual[i]) > MINBQ && int(b.Qual[j]) > MINBQ {
+				if int(a.Qual[i]) >= MINBQ && int(b.Qual[j]) >= MINBQ {
 					codonA := string(a.Seq[i-2 : i+1])
 					codonB := string(b.Seq[j-2 : j+1])
 					aaA := codeTable.Table[codonA]
@@ -205,33 +204,37 @@ func isATGC(b byte) bool {
 	return false
 }
 
+type P2 struct {
+	Total float64
+	Count int
+}
+
 // calc
-func calc(subProfileChan chan SubProfile, maxl int) (covs []*correlation.BivariateCovariance) {
-	covs = []*correlation.BivariateCovariance{}
-	for i := 0; i < maxl; i++ {
-		covs = append(covs, correlation.NewBivariateCovariance(false))
-	}
+func calc(subProfileChan chan SubProfile, maxl int) (p2 []P2) {
+	p2 = make([]P2, maxl)
 
 	for subProfile := range subProfileChan {
 		for i := 0; i < len(subProfile.Profile); i++ {
 			x := subProfile.Profile[i]
 			if !math.IsNaN(x) {
-				for j := i; j < len(subProfile.Profile) && j-i < len(covs); j++ {
+				for j := i; j < len(subProfile.Profile) && j-i < len(p2); j++ {
 					l := j - i
 					y := subProfile.Profile[j]
 					if !math.IsNaN(y) {
-						covs[l].Increment(x, y)
+						p2[l].Total += x * y
+						p2[l].Count++
 					}
 				}
 			}
 		}
 	}
+
 	return
 
 }
 
 // collect
-func collect(covsChan chan []*correlation.BivariateCovariance, maxl, numJob int) (meanVars []*meanvar.MeanVar) {
+func collect(p2Chan chan []P2, maxl, numJob int) (meanVars []*meanvar.MeanVar) {
 	meanVars = []*meanvar.MeanVar{}
 	for i := 0; i < maxl; i++ {
 		meanVars = append(meanVars, meanvar.New())
@@ -243,12 +246,12 @@ func collect(covsChan chan []*correlation.BivariateCovariance, maxl, numJob int)
 		defer pbar.Finish()
 	}
 
-	for covs := range covsChan {
-		for i := range covs {
-			c := covs[i]
-			v := c.GetResult()
-			if !math.IsNaN(v) {
-				meanVars[i].Increment(v)
+	for p2 := range p2Chan {
+		for i := range p2 {
+			n := p2[i].Count
+			v := p2[i].Total
+			if n > 100 {
+				meanVars[i].Increment(v / float64(n))
 			}
 		}
 		if ShowProgress {
