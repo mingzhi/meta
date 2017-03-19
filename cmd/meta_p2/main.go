@@ -87,7 +87,8 @@ func main() {
 				gene := pileupCodons(records, 0)
 				ok := checkCoverage(gene, geneLen, minDepth, minCoverage)
 				if ok {
-					p2, p4 := calcP2(gene, maxl, minDepth, codeTable)
+					p2 := calcP2(gene, maxl, minDepth, codeTable)
+					p4 := calcP4(gene, maxl, minDepth, codeTable)
 					p2Chan <- p2
 					p2Chan <- p4
 				}
@@ -185,7 +186,7 @@ func doubleCount(nc *NuclCov, codonPairArray []CodonPair) {
 	}
 }
 
-func calcP2(gene *CodonGene, maxl, minDepth int, codeTable *taxonomy.GeneticCode) (p2Res, p4Res []CorrResult) {
+func calcP2(gene *CodonGene, maxl, minDepth int, codeTable *taxonomy.GeneticCode) (p2Res []CorrResult) {
 	gene.SortCodonByReadID()
 	alphabet := []byte{'A', 'T', 'G', 'C'}
 	for i := 0; i < gene.Len(); i++ {
@@ -210,21 +211,81 @@ func calcP2(gene *CodonGene, maxl, minDepth int, codeTable *taxonomy.GeneticCode
 
 					for len(p2Res) <= lag {
 						p2Res = append(p2Res, CorrResult{Type: "P2", Lag: len(p2Res)})
-						p4Res = append(p4Res, CorrResult{Type: "P4", Lag: len(p4Res)})
 					}
-					xy, x, y, n := nc.Cov11()
+					xy, _, _, n := nc.Cov11()
 					p2Res[lag].Count += int64(n)
 					p2Res[lag].Value += xy
-
-					xbar := float64(x) / float64(n)
-					ybar := float64(y) / float64(n)
-					p4Res[lag].Value += xbar * ybar
-					p4Res[lag].Count++
 				}
 			}
 		}
 	}
 
+	return
+}
+
+func calcP4(gene *CodonGene, maxl, minDepth int, codeTable *taxonomy.GeneticCode) (p4Res []CorrResult) {
+	gene.SortCodonByReadID()
+	var valueArray []float64
+	var countArray []int
+	var posArray []int
+	for i := 0; i < gene.Len(); i++ {
+		value, count := autoCov(gene, i, minDepth, codeTable)
+		if count > 0 {
+			pos := gene.CodonPiles[i].Codons[0].GenePos
+			valueArray = append(valueArray, value)
+			countArray = append(countArray, count)
+			posArray = append(posArray, pos)
+		}
+
+	}
+	for i := 0; i < len(valueArray); i++ {
+		value1 := valueArray[i]
+		count1 := countArray[i]
+		xbar := value1 / float64(count1)
+		for j := i; j < len(valueArray); j++ {
+			value2 := valueArray[j]
+			count2 := countArray[j]
+			ybar := value2 / float64(count2)
+			lag := posArray[j] - posArray[i]
+			if lag < 0 {
+				lag = -lag
+			}
+			if lag >= maxl {
+				break
+			}
+			for len(p4Res) <= lag {
+				p4Res = append(p4Res, CorrResult{Type: "P4", Lag: len(p4Res)})
+			}
+			p4Res[lag].Value += xbar * ybar
+			p4Res[lag].Count++
+		}
+	}
+
+	return
+}
+
+func autoCov(gene *CodonGene, i, minDepth int, codeTable *taxonomy.GeneticCode) (value float64, count int) {
+	alphabet := []byte{'A', 'T', 'G', 'C'}
+	codonPairRaw := gene.PairCodonAt(i, i)
+	if len(codonPairRaw) < 2 {
+		return
+	}
+	lag := codonPairRaw[0].B.GenePos - codonPairRaw[0].A.GenePos
+	if lag < 0 {
+		lag = -lag
+	}
+
+	splittedCodonPairs := SynoumousSplitCodonPairs(codonPairRaw, codeTable)
+	for _, synPairs := range splittedCodonPairs {
+		if len(synPairs) > minDepth {
+			nc := NewNuclCov(alphabet)
+			doubleCount(nc, synPairs)
+
+			xy, _, _, n := nc.Cov11()
+			value += xy
+			count += n
+		}
+	}
 	return
 }
 
