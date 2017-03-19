@@ -79,7 +79,7 @@ func main() {
 	codeTable := taxonomy.GeneticCodes()["11"]
 
 	done := make(chan bool)
-	p2Chan := make(chan []P2)
+	p2Chan := make(chan []CorrResult)
 	for i := 0; i < ncpu; i++ {
 		go func() {
 			for records := range recordsChan {
@@ -87,8 +87,9 @@ func main() {
 				gene := pileupCodons(records, 0)
 				ok := checkCoverage(gene, geneLen, minDepth, minCoverage)
 				if ok {
-					p2 := calcP2(gene, maxl, minDepth, codeTable)
+					p2, p4 := calcP2(gene, maxl, minDepth, codeTable)
 					p2Chan <- p2
+					p2Chan <- p4
 				}
 			}
 			done <- true
@@ -102,10 +103,25 @@ func main() {
 		}
 	}()
 
+	collector := NewCollector()
+	for corrResults := range p2Chan {
+		collector.Add(CorrResults{Results: corrResults})
+	}
+
 	numJob := len(header.Refs())
 	log.Printf("Number of references: %d\n", numJob)
-	meanVars := collect(p2Chan, maxl, numJob)
-	write(meanVars, outFile)
+	w, err := os.Create(outFile)
+	if err != nil {
+		panic(err)
+	}
+	defer w.Close()
+
+	w.WriteString("l,m,v,n,t\n")
+	results := collector.Results()
+	for _, res := range results {
+		w.WriteString(fmt.Sprintf("%d,%g,%g,%d,%s\n",
+			res.Lag, res.Value, res.Variance, res.Count, res.Type))
+	}
 }
 
 // pileupCodons pileup codons of a list of reads at a gene.
@@ -169,7 +185,7 @@ func doubleCount(nc *NuclCov, codonPairArray []CodonPair) {
 	}
 }
 
-func calcP2(gene *CodonGene, maxl, minDepth int, codeTable *taxonomy.GeneticCode) (res []P2) {
+func calcP2(gene *CodonGene, maxl, minDepth int, codeTable *taxonomy.GeneticCode) (p2Res, p4Res []CorrResult) {
 	gene.SortCodonByReadID()
 	alphabet := []byte{'A', 'T', 'G', 'C'}
 	for i := 0; i < gene.Len(); i++ {
@@ -192,12 +208,18 @@ func calcP2(gene *CodonGene, maxl, minDepth int, codeTable *taxonomy.GeneticCode
 					nc := NewNuclCov(alphabet)
 					doubleCount(nc, synPairs)
 
-					for len(res) <= lag {
-						res = append(res, P2{})
+					for len(p2Res) <= lag {
+						p2Res = append(p2Res, CorrResult{Type: "P2", Lag: len(p2Res)})
+						p4Res = append(p4Res, CorrResult{Type: "P4", Lag: len(p4Res)})
 					}
-					xy, _, _, n := nc.Cov11()
-					res[lag].Count += n
-					res[lag].Total += xy
+					xy, x, y, n := nc.Cov11()
+					p2Res[lag].Count += n
+					p2Res[lag].Value += xy
+
+					xbar := float64(x) / float64(n)
+					ybar := float64(y) / float64(n)
+					p4Res[lag].Value += xbar * ybar
+					p4Res[lag].Count++
 				}
 			}
 		}
