@@ -45,6 +45,7 @@ func main() {
 	var maxl int       // max length of correlation
 	var ncpu int       // number of CPUs
 	var minDepth int   // min depth
+	var minCoverage float64
 	// Parse command arguments.
 	app := kingpin.New("meta_p2", "Calculate mutation correlation from bacterial metagenomic sequence data")
 	app.Version("v0.1")
@@ -53,6 +54,7 @@ func main() {
 	maxlFlag := app.Flag("maxl", "max len of correlations").Default("100").Int()
 	ncpuFlag := app.Flag("ncpu", "number of CPUs").Default("0").Int()
 	minDepthFlag := app.Flag("min-depth", "min depth").Default("10").Int()
+	minCoverageFlag := app.Flag("min-coverage", "min coverage").Default("0.8").Float64()
 	progressFlag := app.Flag("progress", "show progress").Default("false").Bool()
 	kingpin.MustParse(app.Parse(os.Args[1:]))
 
@@ -66,6 +68,7 @@ func main() {
 	}
 	ShowProgress = *progressFlag
 	minDepth = *minDepthFlag
+	minCoverage = *minCoverageFlag
 
 	runtime.GOMAXPROCS(ncpu)
 
@@ -80,9 +83,13 @@ func main() {
 	for i := 0; i < ncpu; i++ {
 		go func() {
 			for records := range recordsChan {
+				geneLen := records[0].Ref.Len()
 				gene := pileupCodons(records, 0)
-				p2 := calcP2(gene, maxl, minDepth, codeTable)
-				p2Chan <- p2
+				ok := checkCoverage(gene, geneLen, minDepth, minCoverage)
+				if ok {
+					p2 := calcP2(gene, maxl, minDepth, codeTable)
+					p2Chan <- p2
+				}
 			}
 			done <- true
 		}()
@@ -356,5 +363,17 @@ func Map2Ref(r *sam.Record) (s []byte, q []byte) {
 
 	s = bytes.ToUpper(s)
 
+	return
+}
+
+func checkCoverage(gene *CodonGene, geneLen, minDepth int, minCoverage float64) (ok bool) {
+	num := 0
+	for _, pile := range gene.CodonPiles {
+		if pile.Len() > minDepth {
+			num++
+		}
+	}
+	coverage := float64(num) / float64(geneLen/3)
+	ok = coverage > minCoverage
 	return
 }
