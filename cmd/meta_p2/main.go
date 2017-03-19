@@ -51,6 +51,7 @@ func main() {
 	var outFile string // output file
 	var maxl int       // max length of correlation
 	var ncpu int       // number of CPUs
+	var minDepth int   // min depth
 	// Parse command arguments.
 	app := kingpin.New("meta_p2", "Calculate mutation correlation from bacterial metagenomic sequence data")
 	app.Version("v0.1")
@@ -60,6 +61,7 @@ func main() {
 	ncpuFlag := app.Flag("ncpu", "number of CPUs").Default("0").Int()
 	minBQFlag := app.Flag("minbq", "min base quality").Default("13").Int()
 	minMQFlag := app.Flag("minmq", "min mapping quality").Default("30").Int()
+	minDepthFlag := app.Flag("min-depth", "min depth").Default("10").Int()
 	progressFlag := app.Flag("progress", "show progress").Default("false").Bool()
 	kingpin.MustParse(app.Parse(os.Args[1:]))
 
@@ -74,6 +76,7 @@ func main() {
 	MINBQ = *minBQFlag
 	MINMQ = *minMQFlag
 	ShowProgress = *progressFlag
+	minDepth = *minDepthFlag
 
 	runtime.GOMAXPROCS(ncpu)
 
@@ -86,9 +89,8 @@ func main() {
 	for i := 0; i < ncpu; i++ {
 		go func() {
 			for records := range recordsChan {
-				readsChan := slideReads(records)
-				profileChan := compare(readsChan, codeTable)
-				p2 := calc(profileChan, maxl)
+				gene := pileupCodons(records, 0)
+				p2 := calc2(gene, maxl, minDepth, codeTable)
 				p2Chan <- p2
 			}
 			done <- true
@@ -106,6 +108,36 @@ func main() {
 	log.Printf("Number of references: %d\n", numJob)
 	meanVars := collect(p2Chan, maxl, numJob)
 	write(meanVars, outFile)
+}
+
+// pileupCodons pileup codons of a list of reads at a gene.
+func pileupCodons(records []*sam.Record, offset int) (codonGene *CodonGene) {
+	codonGene = NewCodonGene()
+	for i, read := range records {
+		readID := i
+		codonArray := getCodons(read, readID, offset)
+		for _, codon := range codonArray {
+			codonGene.AddCodon(&codon)
+		}
+	}
+
+	return
+}
+
+// getCodons split a read into a list of Codon.
+func getCodons(read *sam.Record, readID, offset int) (codonArray []Codon) {
+	// get the mapped sequence of the read onto the reference.
+	mappedSeq, _ := Map2Ref(read)
+	for i := 2; i < len(mappedSeq); i++ {
+		if (read.Pos+i-offset+1)%3 == 0 {
+			codonSeq := string(mappedSeq[i-2 : i+1])
+			genePos := (read.Pos+i-offset+1)/3 - 1
+			codon := Codon{ReadID: readID, Seq: codonSeq, GenePos: genePos}
+			codonArray = append(codonArray, codon)
+		}
+	}
+
+	return
 }
 
 // slideReads
@@ -204,9 +236,55 @@ func isATGC(b byte) bool {
 	return false
 }
 
+// P2 stores p2 calculation results.
 type P2 struct {
 	Total float64
 	Count int
+}
+
+// doubleCount count codon pairs.
+func doubleCount(nc *NuclCov, codonPairArray []CodonPair) {
+	for _, cp := range codonPairArray {
+		a := cp.A.Seq[2]
+		b := cp.B.Seq[2]
+		nc.Add(a, b)
+	}
+}
+
+func calc2(gene *CodonGene, maxl, minDepth int, codeTable *taxonomy.GeneticCode) (res []P2) {
+	alphabet := []byte{'A', 'T', 'G', 'C'}
+	for i := 0; i < gene.Len(); i++ {
+		for j := i; j < gene.Len(); j++ {
+			codonPairRaw := gene.PairCodonAt(i, j)
+			if len(codonPairRaw) < 2 {
+				continue
+			}
+			lag := codonPairRaw[0].B.GenePos - codonPairRaw[0].A.GenePos
+			if lag < 0 {
+				lag = -lag
+			}
+			if lag >= maxl {
+				break
+			}
+
+			splittedCodonPairs := SynoumousSplitCodonPairs(codonPairRaw, codeTable)
+			for _, synPairs := range splittedCodonPairs {
+				if len(synPairs) > minDepth {
+					nc := NewNuclCov(alphabet)
+					doubleCount(nc, synPairs)
+
+					for len(res) <= lag {
+						res = append(res, P2{})
+					}
+					xy, _, _, n := nc.Cov11()
+					res[lag].Count += n
+					res[lag].Total += xy
+				}
+			}
+		}
+	}
+
+	return
 }
 
 // calc
