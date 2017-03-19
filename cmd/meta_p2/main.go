@@ -213,7 +213,7 @@ func calcP2(gene *CodonGene, maxl, minDepth int, codeTable *taxonomy.GeneticCode
 						p4Res = append(p4Res, CorrResult{Type: "P4", Lag: len(p4Res)})
 					}
 					xy, x, y, n := nc.Cov11()
-					p2Res[lag].Count += n
+					p2Res[lag].Count += int64(n)
 					p2Res[lag].Value += xy
 
 					xbar := float64(x) / float64(n)

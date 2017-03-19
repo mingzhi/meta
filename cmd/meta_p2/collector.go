@@ -4,7 +4,7 @@ package main
 type CorrResult struct {
 	Lag      int
 	Value    float64
-	Count    int
+	Count    int64
 	Type     string
 	Variance float64
 }
@@ -31,7 +31,7 @@ func (c *Collector) Add(results CorrResults) {
 			c.m[res.Type] = append(c.m[res.Type], NewMeanVar())
 		}
 		if res.Count > 0 {
-			c.m[res.Type][res.Lag].Add(res.Value)
+			c.m[res.Type][res.Lag].Add(res.Value / float64(res.Count))
 		}
 	}
 }
@@ -85,7 +85,7 @@ func (c *Collector) Results() (results []CorrResult) {
 			if ns[i] > 0 {
 				res := CorrResult{}
 				res.Lag = i
-				res.Count = ns[i]
+				res.Count = int64(ns[i])
 				res.Type = ctype
 				res.Value = means[i]
 				res.Variance = vars[i]
