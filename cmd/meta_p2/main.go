@@ -117,7 +117,7 @@ func pileupCodons(records []*sam.Record, offset int) (codonGene *CodonGene) {
 		readID := i
 		codonArray := getCodons(read, readID, offset)
 		for _, codon := range codonArray {
-			codonGene.AddCodon(&codon)
+			codonGene.AddCodon(codon)
 		}
 	}
 
@@ -128,12 +128,15 @@ func pileupCodons(records []*sam.Record, offset int) (codonGene *CodonGene) {
 func getCodons(read *sam.Record, readID, offset int) (codonArray []Codon) {
 	// get the mapped sequence of the read onto the reference.
 	mappedSeq, _ := Map2Ref(read)
-	for i := 2; i < len(mappedSeq); i++ {
+	for i := 2; i < len(mappedSeq); {
 		if (read.Pos+i-offset+1)%3 == 0 {
 			codonSeq := string(mappedSeq[i-2 : i+1])
 			genePos := (read.Pos+i-offset+1)/3 - 1
 			codon := Codon{ReadID: readID, Seq: codonSeq, GenePos: genePos}
 			codonArray = append(codonArray, codon)
+			i += 3
+		} else {
+			i++
 		}
 	}
 
