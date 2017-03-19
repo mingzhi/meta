@@ -252,6 +252,7 @@ func doubleCount(nc *NuclCov, codonPairArray []CodonPair) {
 }
 
 func calc2(gene *CodonGene, maxl, minDepth int, codeTable *taxonomy.GeneticCode) (res []P2) {
+	gene.SortCodonByReadID()
 	alphabet := []byte{'A', 'T', 'G', 'C'}
 	for i := 0; i < gene.Len(); i++ {
 		for j := i; j < gene.Len(); j++ {

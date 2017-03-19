@@ -28,13 +28,13 @@ func (cp *CodonPile) Append(c *Codon) {
 	cp.Codons = append(cp.Codons, c)
 }
 
-// SortReadByName sorts Codons by ReadName
-func (cp *CodonPile) SortReadByName() {
+// SortReadByID sorts Codons by ReadName
+func (cp *CodonPile) SortReadByID() {
 	sort.Slice(cp.Codons, func(i, j int) bool { return cp.Codons[i].ReadID < cp.Codons[j].ReadID })
 }
 
-// SearchByReadName search a codon by ReadName. If not found, it returns nil.
-func (cp *CodonPile) SearchByReadName(readID int) *Codon {
+// SearchReadByID search a codon by ReadName. If not found, it returns nil.
+func (cp *CodonPile) SearchReadByID(readID int) *Codon {
 	data := cp.Codons
 	i := sort.Search(len(data), func(i int) bool { return data[i].ReadID >= readID })
 	if i < len(data) && data[i].ReadID == readID {
@@ -79,6 +79,13 @@ func (cg *CodonGene) Len() int {
 	return len(cg.CodonPiles)
 }
 
+// SortCodonByReadID sorts codons by read id for each codon pile.
+func (cg *CodonGene) SortCodonByReadID() {
+	for _, codonPile := range cg.CodonPiles {
+		codonPile.SortReadByID()
+	}
+}
+
 // CodonPair stores a pair of Codon
 type CodonPair struct {
 	A, B *Codon
@@ -94,7 +101,7 @@ func (cg *CodonGene) PairCodonAt(i, j int) (pairs []CodonPair) {
 	pile2 := cg.CodonPiles[j]
 	for k := 0; k < pile1.Len(); k++ {
 		codon1 := pile1.Codons[k]
-		codon2 := pile2.SearchByReadName(codon1.ReadID)
+		codon2 := pile2.SearchReadByID(codon1.ReadID)
 		if codon2 != nil {
 			pairs = append(pairs, CodonPair{A: codon1, B: codon2})
 		}
