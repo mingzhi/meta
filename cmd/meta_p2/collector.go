@@ -84,7 +84,7 @@ func (c *Collector) Results() (results []CorrResult) {
 		for i := 0; i < len(means); i++ {
 			if ns[i] > 0 {
 				res := CorrResult{}
-				res.Lag = i
+				res.Lag = i * 3
 				res.Count = int64(ns[i])
 				res.Type = ctype
 				res.Value = means[i]
