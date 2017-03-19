@@ -9,7 +9,7 @@ import (
 // Codon stores a codon value, the position in a genome and the read id.
 type Codon struct {
 	Seq     string
-	ReadID  int
+	ReadID  string
 	GenePos int
 }
 
@@ -34,13 +34,13 @@ func (cp *CodonPile) SortReadByID() {
 }
 
 // SearchReadByID search a codon by ReadName. If not found, it returns nil.
-func (cp *CodonPile) SearchReadByID(readID int) Codon {
+func (cp *CodonPile) SearchReadByID(readID string) Codon {
 	data := cp.Codons
 	i := sort.Search(len(data), func(i int) bool { return data[i].ReadID >= readID })
 	if i < len(data) && data[i].ReadID == readID {
 		return data[i]
 	}
-	return Codon{ReadID: -1}
+	return Codon{ReadID: ""}
 }
 
 // Len return the lenght of pileup Codons.
@@ -103,7 +103,7 @@ func (cg *CodonGene) PairCodonAt(i, j int) (pairs []CodonPair) {
 		codon1 := pile1.Codons[k]
 		codon2 := pile2.SearchReadByID(codon1.ReadID)
 
-		if codon2.ReadID != -1 {
+		if codon2.ReadID != "" {
 			pairs = append(pairs, CodonPair{A: codon1, B: codon2})
 		}
 		if len(pairs) == pile2.Len() {
