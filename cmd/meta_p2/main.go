@@ -35,17 +35,10 @@ func (m MappedRead) Len() int {
 	return len(m.Seq)
 }
 
-// MINBQ min bq
-var MINBQ int
-
-// MINMQ min mapping quality
-var MINMQ int
-
 // ShowProgress show progress.
 var ShowProgress bool
 
 func main() {
-
 	// Command variables.
 	var bamFile string // bam or sam file
 	var outFile string // output file
@@ -59,8 +52,6 @@ func main() {
 	outFileArg := app.Arg("outfile", "out file").Required().String()
 	maxlFlag := app.Flag("maxl", "max len of correlations").Default("100").Int()
 	ncpuFlag := app.Flag("ncpu", "number of CPUs").Default("0").Int()
-	minBQFlag := app.Flag("minbq", "min base quality").Default("13").Int()
-	minMQFlag := app.Flag("minmq", "min mapping quality").Default("30").Int()
 	minDepthFlag := app.Flag("min-depth", "min depth").Default("10").Int()
 	progressFlag := app.Flag("progress", "show progress").Default("false").Bool()
 	kingpin.MustParse(app.Parse(os.Args[1:]))
@@ -73,15 +64,15 @@ func main() {
 	} else {
 		ncpu = *ncpuFlag
 	}
-	MINBQ = *minBQFlag
-	MINMQ = *minMQFlag
 	ShowProgress = *progressFlag
 	minDepth = *minDepthFlag
 
 	runtime.GOMAXPROCS(ncpu)
 
 	// Read sequence reads.
-	refs, recordsChan := readBamFile(bamFile)
+	headerChan, recordsChan := readBamFile(bamFile)
+	header := <-headerChan
+
 	codeTable := taxonomy.GeneticCodes()["11"]
 
 	done := make(chan bool)
@@ -90,7 +81,7 @@ func main() {
 		go func() {
 			for records := range recordsChan {
 				gene := pileupCodons(records, 0)
-				p2 := calc2(gene, maxl, minDepth, codeTable)
+				p2 := calcP2(gene, maxl, minDepth, codeTable)
 				p2Chan <- p2
 			}
 			done <- true
@@ -104,7 +95,7 @@ func main() {
 		}
 	}()
 
-	numJob := len(refs)
+	numJob := len(header.Refs())
 	log.Printf("Number of references: %d\n", numJob)
 	meanVars := collect(p2Chan, maxl, numJob)
 	write(meanVars, outFile)
@@ -143,88 +134,6 @@ func getCodons(read *sam.Record, readID, offset int) (codonArray []Codon) {
 	return
 }
 
-// slideReads
-func slideReads(records []*sam.Record) chan []MappedRead {
-	mappedReadArrChan := make(chan []MappedRead)
-	go func() {
-		defer close(mappedReadArrChan)
-
-		totalDiscards := 0
-		totalUsed := 0
-		mappedReadArr := []MappedRead{}
-		for _, r := range records {
-			if r.MapQ != '*' && int(r.MapQ) < MINMQ {
-				totalDiscards++
-				continue
-			}
-			current := MappedRead{}
-			current.Pos = r.Pos
-			current.Seq, current.Qual = Map2Ref(r)
-			mappedReadArr = append(mappedReadArr, current)
-			if len(mappedReadArr) > 0 {
-				a := mappedReadArr[0]
-				if a.Pos+a.Len() < current.Pos {
-					mappedReadArrChan <- mappedReadArr
-					mappedReadArr = mappedReadArr[1:]
-				}
-			}
-			totalUsed++
-		}
-	}()
-
-	return mappedReadArrChan
-}
-
-func compare(readsChan chan []MappedRead, codeTable *taxonomy.GeneticCode) chan SubProfile {
-	resChan := make(chan SubProfile)
-	go func() {
-		defer close(resChan)
-		for reads := range readsChan {
-			a := reads[0]
-			for j := 1; j < len(reads); j++ {
-				b := reads[j]
-				if b.Pos > a.Len()+a.Pos {
-					break
-				}
-				profile := compareMappedReads(a, b, codeTable)
-				resChan <- profile
-			}
-		}
-	}()
-	return resChan
-}
-
-// compareMappedReads compares two MappedReads in their overlapped part,
-// and return a subsitution profile.
-func compareMappedReads(a, b MappedRead, codeTable *taxonomy.GeneticCode) SubProfile {
-	var subs []float64
-	lag := b.Pos - a.Pos
-	for j := 0; j < a.Len()-lag && j < b.Len(); j++ {
-		i := j + lag
-		d := math.NaN()
-		pos := j + b.Pos
-		if (pos+1)%3 == 0 && j > 1 {
-			if isATGC(a.Seq[i]) && isATGC(b.Seq[j]) {
-				if int(a.Qual[i]) >= MINBQ && int(b.Qual[j]) >= MINBQ {
-					codonA := string(a.Seq[i-2 : i+1])
-					codonB := string(b.Seq[j-2 : j+1])
-					aaA := codeTable.Table[codonA]
-					aaB := codeTable.Table[codonB]
-					if aaA == aaB {
-						if a.Seq[i] != b.Seq[j] {
-							d = 1.0
-						} else {
-							d = 0.0
-						}
-					}
-				}
-			}
-		}
-		subs = append(subs, d)
-	}
-	return SubProfile{Pos: b.Pos, Profile: subs}
-}
-
 func isATGC(b byte) bool {
 	if b == 'A' {
 		return true
@@ -254,7 +163,7 @@ func doubleCount(nc *NuclCov, codonPairArray []CodonPair) {
 	}
 }
 
-func calc2(gene *CodonGene, maxl, minDepth int, codeTable *taxonomy.GeneticCode) (res []P2) {
+func calcP2(gene *CodonGene, maxl, minDepth int, codeTable *taxonomy.GeneticCode) (res []P2) {
 	gene.SortCodonByReadID()
 	alphabet := []byte{'A', 'T', 'G', 'C'}
 	for i := 0; i < gene.Len(); i++ {
@@ -289,30 +198,6 @@ func calc2(gene *CodonGene, maxl, minDepth int, codeTable *taxonomy.GeneticCode)
 	}
 
 	return
-}
-
-// calc
-func calc(subProfileChan chan SubProfile, maxl int) (p2 []P2) {
-	p2 = make([]P2, maxl)
-
-	for subProfile := range subProfileChan {
-		for i := 0; i < len(subProfile.Profile); i++ {
-			x := subProfile.Profile[i]
-			if !math.IsNaN(x) {
-				for j := i; j < len(subProfile.Profile) && j-i < len(p2); j++ {
-					l := j - i
-					y := subProfile.Profile[j]
-					if !math.IsNaN(y) {
-						p2[l].Total += x * y
-						p2[l].Count++
-					}
-				}
-			}
-		}
-	}
-
-	return
-
 }
 
 // collect
@@ -368,7 +253,7 @@ func write(meanVars []*meanvar.MeanVar, filename string) {
 		} else {
 			m = m / ks
 		}
-		w.WriteString(fmt.Sprintf("%d,%g,%g,%d,%s,all\n", i, m, v, n, t))
+		w.WriteString(fmt.Sprintf("%d,%g,%g,%d,%s,all\n", i*3, m, v, n, t))
 	}
 }
 
@@ -379,14 +264,16 @@ type SamReader interface {
 }
 
 // ReadBamFile reads bam file, and return the header and a channel of sam records.
-func readBamFile(fileName string) (refs []*sam.Reference, c chan []*sam.Record) {
+func readBamFile(fileName string) (headerChan chan *sam.Header, recordChan chan []*sam.Record) {
 	// Initialize the channel of sam records.
-	c = make(chan []*sam.Record)
+	headerChan = make(chan *sam.Header)
+	recordChan = make(chan []*sam.Record)
 
 	// Create a new go routine to read the records.
 	go func() {
 		// Close the record channel when finished.
-		defer close(c)
+		defer close(headerChan)
+		defer close(recordChan)
 
 		// Open file stream, and close it when finished.
 		f, err := os.Open(fileName)
@@ -411,7 +298,7 @@ func readBamFile(fileName string) (refs []*sam.Reference, c chan []*sam.Record) 
 		}
 
 		header := reader.Header()
-		refs = header.Refs()
+		headerChan <- header
 
 		// Read sam records and send them to the channel,
 		// until it hit an error, which raises a panic
@@ -431,7 +318,7 @@ func readBamFile(fileName string) (refs []*sam.Reference, c chan []*sam.Record) 
 			}
 			if rec.RefID() != currentRefID {
 				if len(records) > 0 {
-					c <- records
+					recordChan <- records
 					records = []*sam.Record{}
 				}
 				currentRefID = rec.RefID()
@@ -439,11 +326,11 @@ func readBamFile(fileName string) (refs []*sam.Reference, c chan []*sam.Record) 
 			records = append(records, rec)
 		}
 		if len(records) > 0 {
-			c <- records
+			recordChan <- records
 		}
 	}()
 
-	return nil, c
+	return
 }
 
 // Map2Ref Obtains a read mapping to the reference genome.
