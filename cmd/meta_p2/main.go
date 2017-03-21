@@ -91,9 +91,8 @@ func main() {
 	for i := 0; i < ncpu; i++ {
 		go func() {
 			for geneRecords := range recordsChan {
-				records := geneRecords.Records
 				geneLen := geneRecords.End - geneRecords.Start
-				gene := pileupCodons(records, geneRecords.Start)
+				gene := pileupCodons(geneRecords)
 				ok := checkCoverage(gene, geneLen, minDepth, minCoverage)
 				if ok {
 					p2 := calcP2(gene, maxl, minDepth, codeTable)
@@ -135,10 +134,10 @@ func main() {
 }
 
 // pileupCodons pileup codons of a list of reads at a gene.
-func pileupCodons(records []*sam.Record, offset int) (codonGene *CodonGene) {
+func pileupCodons(geneRecords GeneSamRecords) (codonGene *CodonGene) {
 	codonGene = NewCodonGene()
-	for _, read := range records {
-		codonArray := getCodons(read, offset)
+	for _, read := range geneRecords.Records {
+		codonArray := getCodons(read, geneRecords.Start, geneRecords.Strand)
 		for _, codon := range codonArray {
 			codonGene.AddCodon(codon)
 		}
