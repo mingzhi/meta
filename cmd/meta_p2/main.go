@@ -9,6 +9,7 @@ import (
 	"runtime"
 
 	"github.com/biogo/hts/sam"
+	"github.com/mingzhi/biogo/seq"
 	"github.com/mingzhi/gomath/stat/desc/meanvar"
 	"github.com/mingzhi/ncbiftp/taxonomy"
 	"gopkg.in/alecthomas/kingpin.v2"
@@ -147,18 +148,20 @@ func pileupCodons(records []*sam.Record, offset int) (codonGene *CodonGene) {
 }
 
 // getCodons split a read into a list of Codon.
-func getCodons(read *sam.Record, offset int) (codonArray []Codon) {
+func getCodons(read *sam.Record, offset, strand int) (codonArray []Codon) {
 	// get the mapped sequence of the read onto the reference.
 	mappedSeq, _ := Map2Ref(read)
 	for i := 2; i < len(mappedSeq); {
 		if (read.Pos+i-offset+1)%3 == 0 {
-			codonSeq := string(mappedSeq[i-2 : i+1])
+			codonSeq := mappedSeq[i-2 : i+1]
 			genePos := (read.Pos+i-offset+1)/3 - 1
-			if genePos < 0 {
-				continue
+			if genePos >= 0 {
+				if strand == -1 {
+					codonSeq = seq.Reverse(seq.Complement(codonSeq))
+				}
+				codon := Codon{ReadID: read.Name, Seq: string(codonSeq), GenePos: genePos}
+				codonArray = append(codonArray, codon)
 			}
-			codon := Codon{ReadID: read.Name, Seq: codonSeq, GenePos: genePos}
-			codonArray = append(codonArray, codon)
 			i += 3
 		} else {
 			i++

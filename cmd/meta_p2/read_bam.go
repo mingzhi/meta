@@ -4,8 +4,6 @@ import (
 	"io"
 	"os"
 
-	"log"
-
 	"github.com/biogo/hts/bam"
 	"github.com/biogo/hts/sam"
 	"github.com/mingzhi/biogo/feat/gff"
@@ -71,6 +69,7 @@ func readSamRecords(fileName string) (headerChan chan *sam.Header, samRecChan ch
 type GeneSamRecords struct {
 	Start   int
 	End     int
+	Strand  int
 	Records []*sam.Record
 }
 
@@ -116,15 +115,18 @@ func readStrainBamFile(fileName string, gffMap map[string][]*gff.Record) (header
 		currentReference := ""
 		for record := range samRecChan {
 			if currentReference != record.Ref.Name() {
-				currentReference = record.Ref.Name()
-				gffRecords, found := gffMap[currentReference]
+				gffRecords, found := gffMap[record.Ref.Name()]
 				if !found {
-					log.Panicf("could not find reference %s", currentReference)
+					continue
 				}
+				currentReference = record.Ref.Name()
 				genes = make([]GeneSamRecords, len(gffRecords))
 				for i := range gffRecords {
 					genes[i].Start = gffRecords[i].Start - 1
 					genes[i].End = gffRecords[i].End
+					if gffRecords[i].Strand == gff.ReverseStrand {
+						genes[i].Strand = -1
+					}
 				}
 			}
 
