@@ -3,13 +3,11 @@ package main
 import (
 	"bytes"
 	"fmt"
-	"io"
 	"log"
 	"math"
 	"os"
 	"runtime"
 
-	"github.com/biogo/hts/bam"
 	"github.com/biogo/hts/sam"
 	"github.com/mingzhi/gomath/stat/desc/meanvar"
 	"github.com/mingzhi/ncbiftp/taxonomy"
@@ -40,12 +38,13 @@ var ShowProgress bool
 
 func main() {
 	// Command variables.
-	var bamFile string // bam or sam file
-	var outFile string // output file
-	var maxl int       // max length of correlation
-	var ncpu int       // number of CPUs
-	var minDepth int   // min depth
-	var minCoverage float64
+	var bamFile string      // bam or sam file
+	var outFile string      // output file
+	var maxl int            // max length of correlation
+	var ncpu int            // number of CPUs
+	var minDepth int        // min depth
+	var minCoverage float64 // min coveage
+	var gffFile string      // gff file
 	// Parse command arguments.
 	app := kingpin.New("meta_p2", "Calculate mutation correlation from bacterial metagenomic sequence data")
 	app.Version("v0.1")
@@ -56,6 +55,7 @@ func main() {
 	minDepthFlag := app.Flag("min-depth", "min depth").Default("10").Int()
 	minCoverageFlag := app.Flag("min-coverage", "min coverage").Default("0.8").Float64()
 	progressFlag := app.Flag("progress", "show progress").Default("false").Bool()
+	gffFileFlag := app.Flag("gff-file", "gff file").Default("").String()
 	kingpin.MustParse(app.Parse(os.Args[1:]))
 
 	bamFile = *bamFileArg
@@ -69,12 +69,19 @@ func main() {
 	ShowProgress = *progressFlag
 	minDepth = *minDepthFlag
 	minCoverage = *minCoverageFlag
+	gffFile = *gffFileFlag
 
 	runtime.GOMAXPROCS(ncpu)
 
 	// Read sequence reads.
-	headerChan, recordsChan := readBamFile(bamFile)
-	header := <-headerChan
+	var header *sam.Header
+	var recordsChan chan GeneSamRecords
+	if gffFile != "" {
+		gffRecMap := readGffs(gffFile)
+		header, recordsChan = readStrainBamFile(bamFile, gffRecMap)
+	} else {
+		header, recordsChan = readPanGenomeBamFile(bamFile)
+	}
 
 	codeTable := taxonomy.GeneticCodes()["11"]
 
@@ -82,9 +89,10 @@ func main() {
 	p2Chan := make(chan []CorrResult)
 	for i := 0; i < ncpu; i++ {
 		go func() {
-			for records := range recordsChan {
-				geneLen := records[0].Ref.Len()
-				gene := pileupCodons(records, 0)
+			for geneRecords := range recordsChan {
+				records := geneRecords.Records
+				geneLen := geneRecords.End - geneRecords.Start
+				gene := pileupCodons(records, geneRecords.Start)
 				ok := checkCoverage(gene, geneLen, minDepth, minCoverage)
 				if ok {
 					p2 := calcP2(gene, maxl, minDepth, codeTable)
@@ -146,6 +154,9 @@ func getCodons(read *sam.Record, offset int) (codonArray []Codon) {
 		if (read.Pos+i-offset+1)%3 == 0 {
 			codonSeq := string(mappedSeq[i-2 : i+1])
 			genePos := (read.Pos+i-offset+1)/3 - 1
+			if genePos < 0 {
+				continue
+			}
 			codon := Codon{ReadID: read.Name, Seq: codonSeq, GenePos: genePos}
 			codonArray = append(codonArray, codon)
 			i += 3
@@ -344,82 +355,6 @@ func write(meanVars []*meanvar.MeanVar, filename string) {
 		}
 		w.WriteString(fmt.Sprintf("%d,%g,%g,%d,%s,all\n", i*3, m, v, n, t))
 	}
-}
-
-// SamReader is an interface for sam or bam reader.
-type SamReader interface {
-	Header() *sam.Header
-	Read() (*sam.Record, error)
-}
-
-// ReadBamFile reads bam file, and return the header and a channel of sam records.
-func readBamFile(fileName string) (headerChan chan *sam.Header, recordChan chan []*sam.Record) {
-	// Initialize the channel of sam records.
-	headerChan = make(chan *sam.Header)
-	recordChan = make(chan []*sam.Record)
-
-	// Create a new go routine to read the records.
-	go func() {
-		// Close the record channel when finished.
-		defer close(headerChan)
-		defer close(recordChan)
-
-		// Open file stream, and close it when finished.
-		f, err := os.Open(fileName)
-		if err != nil {
-			panic(err)
-		}
-		defer f.Close()
-
-		var reader SamReader
-		if fileName[len(fileName)-3:] == "bam" {
-			bamReader, err := bam.NewReader(f, 0)
-			if err != nil {
-				panic(err)
-			}
-			defer bamReader.Close()
-			reader = bamReader
-		} else {
-			reader, err = sam.NewReader(f)
-			if err != nil {
-				panic(err)
-			}
-		}
-
-		header := reader.Header()
-		headerChan <- header
-
-		// Read sam records and send them to the channel,
-		// until it hit an error, which raises a panic
-		// if it is not a IO EOF.
-		currentRefID := -1
-		var records []*sam.Record
-		for {
-			rec, err := reader.Read()
-			if err != nil {
-				if err != io.EOF {
-					panic(err)
-				}
-				break
-			}
-			if currentRefID == -1 {
-				currentRefID = rec.RefID()
-			}
-			if rec.RefID() != currentRefID {
-				if len(records) > 0 {
-					recordChan <- records
-					records = []*sam.Record{}
-				}
-				currentRefID = rec.RefID()
-			}
-			records = append(records, rec)
-		}
-		if len(records) > 0 {
-			recordChan <- records
-		}
-	}()
-
-	return
 }
 
 // Map2Ref Obtains a read mapping to the reference genome.
