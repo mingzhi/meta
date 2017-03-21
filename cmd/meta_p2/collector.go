@@ -67,8 +67,11 @@ func (c *Collector) MeanVars(corrType string) (values []*MeanVar) {
 
 // CorrTypes return all corr types.
 func (c *Collector) CorrTypes() (corrTypes []string) {
+	corrTypes = append(corrTypes, "P2")
 	for key := range c.m {
-		corrTypes = append(corrTypes, key)
+		if key != "P2" {
+			corrTypes = append(corrTypes, key)
+		}
 	}
 	return
 }
@@ -89,14 +92,12 @@ func (c *Collector) Results() (results []CorrResult) {
 				res.Type = ctype
 				res.Value = means[i]
 				res.Variance = vars[i]
-				if ctype == "P2" {
-					if i == 0 {
-						res.Type = "Ks"
-						ks = res.Value
-					} else {
-						res.Value /= ks
-						res.Variance /= (ks * ks)
-					}
+				if ctype == "P2" && i == 0 {
+					res.Type = "Ks"
+					ks = res.Value
+				} else {
+					res.Value /= ks
+					res.Variance /= (ks * ks)
 				}
 				results = append(results, res)
 			}
