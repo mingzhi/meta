@@ -37,6 +37,12 @@ func (m MappedRead) Len() int {
 // ShowProgress show progress.
 var ShowProgress bool
 
+// MinBaseQuality min base quality
+var MinBaseQuality int
+
+// MinMapQuality min map quality
+var MinMapQuality int
+
 func main() {
 	// Command variables.
 	var bamFile string      // bam or sam file
@@ -57,6 +63,8 @@ func main() {
 	minCoverageFlag := app.Flag("min-coverage", "min coverage").Default("0.8").Float64()
 	progressFlag := app.Flag("progress", "show progress").Default("false").Bool()
 	gffFileFlag := app.Flag("gff-file", "gff file").Default("").String()
+	minBaseQFlag := app.Flag("min-base-qual", "min base quality").Default("30").Int()
+	minMapQFlag := app.Flag("min-map-qual", "min mapping quality").Default("30").Int()
 	kingpin.MustParse(app.Parse(os.Args[1:]))
 
 	bamFile = *bamFileArg
@@ -71,6 +79,8 @@ func main() {
 	minDepth = *minDepthFlag
 	minCoverage = *minCoverageFlag
 	gffFile = *gffFileFlag
+	MinBaseQuality = *minBaseQFlag
+	MinMapQuality = *minMapQFlag
 
 	runtime.GOMAXPROCS(ncpu)
 
@@ -137,6 +147,9 @@ func main() {
 func pileupCodons(geneRecords GeneSamRecords) (codonGene *CodonGene) {
 	codonGene = NewCodonGene()
 	for _, read := range geneRecords.Records {
+		if int(read.MapQ) < MinMapQuality {
+			continue
+		}
 		codonArray := getCodons(read, geneRecords.Start, geneRecords.Strand)
 		for _, codon := range codonArray {
 			codonGene.AddCodon(codon)
@@ -374,13 +387,19 @@ func Map2Ref(r *sam.Record) (s []byte, q []byte) {
 			p += c.Len()
 		case sam.CigarDeletion, sam.CigarSkipped:
 			for i := 0; i < c.Len(); i++ {
-				s = append(s, '*')
+				s = append(s, '-')
 				q = append(q, 0)
 			}
 		}
 	}
 
 	s = bytes.ToUpper(s)
+
+	for i, a := range q {
+		if int(a) < MinBaseQuality {
+			s[i] = '-'
+		}
+	}
 
 	return
 }
