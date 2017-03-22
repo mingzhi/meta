@@ -147,7 +147,7 @@ func main() {
 func pileupCodons(geneRecords GeneSamRecords) (codonGene *CodonGene) {
 	codonGene = NewCodonGene()
 	for _, read := range geneRecords.Records {
-		if int(read.MapQ) < MinMapQuality {
+		if int(read.MapQ) < MinMapQuality || len(read.Cigar) > 1 || read.Cigar[0].Type() != sam.CigarMatch {
 			continue
 		}
 		codonArray := getCodons(read, geneRecords.Start, geneRecords.Strand)
