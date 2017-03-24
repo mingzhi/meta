@@ -155,6 +155,12 @@ func readStrainBamFile(fileName string, gffMap map[string][]*gff.Record) (header
 			}
 			genes = genes[maxIndex:]
 		}
+
+		for i := 0; i < len(genes); i++ {
+			if len(genes[i].Records) > 0 {
+				recordsChan <- genes[i]
+			}
+		}
 	}()
 	return
 }
