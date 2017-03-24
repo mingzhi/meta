@@ -8,6 +8,8 @@ import (
 	"os"
 	"runtime"
 
+	"encoding/json"
+
 	"github.com/biogo/hts/sam"
 	"github.com/mingzhi/biogo/seq"
 	"github.com/mingzhi/gomath/stat/desc/meanvar"
@@ -52,6 +54,7 @@ func main() {
 	var minDepth int        // min depth
 	var minCoverage float64 // min coveage
 	var gffFile string      // gff file
+	var corrResFile string  // corr result file.
 	// Parse command arguments.
 	app := kingpin.New("meta_p2", "Calculate mutation correlation from bacterial metagenomic sequence data")
 	app.Version("v0.1")
@@ -65,6 +68,7 @@ func main() {
 	gffFileFlag := app.Flag("gff-file", "gff file").Default("").String()
 	minBaseQFlag := app.Flag("min-base-qual", "min base quality").Default("30").Int()
 	minMapQFlag := app.Flag("min-map-qual", "min mapping quality").Default("30").Int()
+	corrResFileFlag := app.Flag("corr-res-file", "corr result file").Default("").String()
 	kingpin.MustParse(app.Parse(os.Args[1:]))
 
 	bamFile = *bamFileArg
@@ -81,6 +85,7 @@ func main() {
 	gffFile = *gffFileFlag
 	MinBaseQuality = *minBaseQFlag
 	MinMapQuality = *minMapQFlag
+	corrResFile = *corrResFileFlag
 
 	runtime.GOMAXPROCS(ncpu)
 
@@ -97,7 +102,7 @@ func main() {
 	codeTable := taxonomy.GeneticCodes()["11"]
 
 	done := make(chan bool)
-	p2Chan := make(chan []CorrResult)
+	p2Chan := make(chan CorrResults)
 	for i := 0; i < ncpu; i++ {
 		go func() {
 			for geneRecords := range recordsChan {
@@ -107,8 +112,8 @@ func main() {
 				if ok {
 					p2 := calcP2(gene, maxl, minDepth, codeTable)
 					p4 := calcP4(gene, maxl, minDepth, codeTable)
-					p2Chan <- p2
-					p2Chan <- p4
+					p2 = append(p2, p4...)
+					p2Chan <- CorrResults{Results: p2}
 				}
 			}
 			done <- true
@@ -122,9 +127,23 @@ func main() {
 		}
 	}()
 
+	var corrResEncoder *json.Encoder
+	if corrResFile != "" {
+		f, err := os.Create(corrResFile)
+		if err != nil {
+			log.Panic(err)
+		}
+		defer f.Close()
+		corrResEncoder = json.NewEncoder(f)
+	}
 	collector := NewCollector()
 	for corrResults := range p2Chan {
-		collector.Add(CorrResults{Results: corrResults})
+		collector.Add(corrResults)
+		if corrResFile != "" {
+			if err := corrResEncoder.Encode(corrResults); err != nil {
+				log.Panic(err)
+			}
+		}
 	}
 
 	numJob := len(header.Refs())

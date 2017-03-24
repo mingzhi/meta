@@ -67,6 +67,7 @@ func readSamRecords(fileName string) (headerChan chan *sam.Header, samRecChan ch
 
 // GeneSamRecords stores Sam Records.
 type GeneSamRecords struct {
+	ID      string
 	Start   int
 	End     int
 	Strand  int
@@ -80,18 +81,18 @@ func readPanGenomeBamFile(fileName string) (header *sam.Header, recordsChan chan
 	recordsChan = make(chan GeneSamRecords)
 	go func() {
 		defer close(recordsChan)
-		currentRefID := -1
+		currentRefID := ""
 		var records []*sam.Record
 		for rec := range samRecChan {
-			if currentRefID == -1 {
-				currentRefID = rec.RefID()
+			if currentRefID == "" {
+				currentRefID = rec.Ref.Name()
 			}
-			if rec.RefID() != currentRefID {
+			if rec.Ref.Name() != currentRefID {
 				if len(records) > 0 {
-					recordsChan <- GeneSamRecords{Start: 0, Records: records, End: records[0].Ref.Len()}
+					recordsChan <- GeneSamRecords{Start: 0, Records: records, End: records[0].Ref.Len(), ID: currentRefID}
 					records = []*sam.Record{}
 				}
-				currentRefID = rec.RefID()
+				currentRefID = rec.Ref.Name()
 			}
 			records = append(records, rec)
 		}
@@ -124,6 +125,7 @@ func readStrainBamFile(fileName string, gffMap map[string][]*gff.Record) (header
 				for i := range gffRecords {
 					genes[i].Start = gffRecords[i].Start - 1
 					genes[i].End = gffRecords[i].End
+					genes[i].ID = gffRecords[i].ID()
 					if gffRecords[i].Strand == gff.ReverseStrand {
 						genes[i].Strand = -1
 					}
