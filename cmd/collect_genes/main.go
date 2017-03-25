@@ -9,7 +9,10 @@ import (
 	"os"
 	"strings"
 
+	"sort"
+
 	"github.com/alecthomas/kingpin"
+	"github.com/cheggaaa/pb"
 )
 
 func main() {
@@ -29,6 +32,8 @@ func main() {
 	collectorMap := make(map[string]*Collector)
 
 	samples := readSamples(sampleFile)
+	pbar := pb.StartNew(len(samples))
+	defer pbar.Finish()
 	for _, sample := range samples {
 		corrFile := sample + appendix
 		corrChan := readCorrResults(corrFile)
@@ -40,6 +45,7 @@ func main() {
 			}
 			collectorMap[geneID].Add(corrResults)
 		}
+		pbar.Increment()
 	}
 
 	w, err := os.Create(outfile)
@@ -48,8 +54,16 @@ func main() {
 	}
 	defer w.Close()
 
+	// sort by gene id
+	var geneIDs []string
+	for geneID := range collectorMap {
+		geneIDs = append(geneIDs, geneID)
+	}
+	sort.Strings(geneIDs)
+
 	w.WriteString("l,m,v,n,t,g\n")
-	for geneID, collector := range collectorMap {
+	for _, geneID := range geneIDs {
+		collector := collectorMap[geneID]
 		results := collector.Results()
 		for _, res := range results {
 			w.WriteString(fmt.Sprintf("%d,%g,%g,%d,%s,%s\n",
@@ -83,6 +97,7 @@ func readSamples(filename string) []string {
 func readCorrResults(filename string) chan CorrResults {
 	c := make(chan CorrResults)
 	go func() {
+		defer close(c)
 		f, err := os.Open(filename)
 		if err != nil {
 			log.Panic(err)
