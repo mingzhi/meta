@@ -20,9 +20,11 @@ func main() {
 	app.Version("v0.1")
 	sampleFileArg := app.Arg("sample-file", "sample file").Required().String()
 	outFileArg := app.Arg("out-file", "output file").Required().String()
+	appendixFlag := app.Flag("appendix", "appendix").Default(".smalt.json").String()
 	kingpin.MustParse(app.Parse(os.Args[1:]))
 	sampleFile = *sampleFileArg
 	outfile = *outFileArg
+	appendix = *appendixFlag
 
 	collectorMap := make(map[string]*Collector)
 
