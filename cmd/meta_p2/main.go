@@ -10,6 +10,11 @@ import (
 
 	"encoding/json"
 
+	"bufio"
+
+	"io"
+	"strings"
+
 	"github.com/biogo/hts/sam"
 	"github.com/mingzhi/biogo/seq"
 	"github.com/mingzhi/gomath/stat/desc/meanvar"
@@ -55,6 +60,8 @@ func main() {
 	var minCoverage float64 // min coveage
 	var gffFile string      // gff file
 	var corrResFile string  // corr result file.
+	var geneFile string     // gene file.
+
 	// Parse command arguments.
 	app := kingpin.New("meta_p2", "Calculate mutation correlation from bacterial metagenomic sequence data")
 	app.Version("v0.1")
@@ -69,6 +76,7 @@ func main() {
 	minBaseQFlag := app.Flag("min-base-qual", "min base quality").Default("30").Int()
 	minMapQFlag := app.Flag("min-map-qual", "min mapping quality").Default("30").Int()
 	corrResFileFlag := app.Flag("corr-res-file", "corr result file").Default("").String()
+	geneFileFlag := app.Flag("gene-file", "gene file").Default("").String()
 	kingpin.MustParse(app.Parse(os.Args[1:]))
 
 	bamFile = *bamFileArg
@@ -86,6 +94,7 @@ func main() {
 	MinBaseQuality = *minBaseQFlag
 	MinMapQuality = *minMapQFlag
 	corrResFile = *corrResFileFlag
+	geneFile = *geneFileFlag
 
 	runtime.GOMAXPROCS(ncpu)
 
@@ -99,6 +108,14 @@ func main() {
 		header, recordsChan = readPanGenomeBamFile(bamFile)
 	}
 
+	var geneSet map[string]bool
+	if geneFile != "" {
+		genes := readLines(geneFile)
+		for _, gene := range genes {
+			geneSet[gene] = true
+		}
+	}
+
 	codeTable := taxonomy.GeneticCodes()["11"]
 
 	done := make(chan bool)
@@ -106,6 +123,11 @@ func main() {
 	for i := 0; i < ncpu; i++ {
 		go func() {
 			for geneRecords := range recordsChan {
+				if geneFile != "" {
+					if !geneSet[geneRecords.ID] {
+						continue
+					}
+				}
 				geneLen := geneRecords.End - geneRecords.Start
 				gene := pileupCodons(geneRecords)
 				ok := checkCoverage(gene, geneLen, minDepth, minCoverage)
@@ -433,4 +455,27 @@ func checkCoverage(gene *CodonGene, geneLen, minDepth int, minCoverage float64) 
 	coverage := float64(num) / float64(geneLen/3)
 	ok = coverage > minCoverage
 	return
+}
+
+// readLines return all trimmed lines.
+func readLines(filename string) []string {
+	f, err := os.Open(filename)
+	if err != nil {
+		log.Panic(err)
+	}
+	defer f.Close()
+
+	rd := bufio.NewReader(f)
+	var lines []string
+	for {
+		line, err := rd.ReadString('\n')
+		if err != nil {
+			if err != io.EOF {
+				log.Panic(err)
+			}
+			break
+		}
+		lines = append(lines, strings.TrimSpace(line))
+	}
+	return lines
 }
