@@ -32,9 +32,10 @@ func main() {
 	collectorMap := make(map[string]*Collector)
 
 	samples := readSamples(sampleFile)
-	pbar := pb.StartNew(len(samples))
+	existSamples := checkFiles(samples, appendix)
+	pbar := pb.StartNew(len(existSamples))
 	defer pbar.Finish()
-	for _, sample := range samples {
+	for _, sample := range existSamples {
 		corrFile := sample + appendix
 		corrChan := readCorrResults(corrFile)
 		for corrResults := range corrChan {
@@ -116,4 +117,15 @@ func readCorrResults(filename string) chan CorrResults {
 		}
 	}()
 	return c
+}
+
+func checkFiles(samples []string, appendix string) []string {
+	var results []string
+	for _, sample := range samples {
+		filename := sample + appendix
+		if _, err := os.Stat(filename); !os.IsNotExist(err) {
+			results = append(results, sample)
+		}
+	}
+	return results
 }
