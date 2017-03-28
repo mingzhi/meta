@@ -11,8 +11,10 @@ type CorrResult struct {
 
 // CorrResults is a list of CorrResult.
 type CorrResults struct {
-	GeneID  string
-	Results []CorrResult
+	GeneID    string
+	Results   []CorrResult
+	ReadNum   int
+	GeneLenth int
 }
 
 // Collector collect correlation results.

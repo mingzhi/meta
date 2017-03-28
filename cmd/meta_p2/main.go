@@ -135,7 +135,7 @@ func main() {
 					p2 := calcP2(gene, maxl, minDepth, codeTable)
 					p4 := calcP4(gene, maxl, minDepth, codeTable)
 					p2 = append(p2, p4...)
-					p2Chan <- CorrResults{Results: p2, GeneID: geneRecords.ID}
+					p2Chan <- CorrResults{Results: p2, GeneID: geneRecords.ID, GeneLenth: geneLen, ReadNum: len(geneRecords.Records)}
 				}
 			}
 			done <- true

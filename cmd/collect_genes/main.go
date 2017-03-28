@@ -19,17 +19,35 @@ func main() {
 	var sampleFile string
 	var appendix string
 	var outfile string
+	var geneFile string
+	var byGene bool
 	app := kingpin.New("collect_genes", "Calculate correlation across multiple samples")
 	app.Version("v0.1")
 	sampleFileArg := app.Arg("sample-file", "sample file").Required().String()
 	outFileArg := app.Arg("out-file", "output file").Required().String()
 	appendixFlag := app.Flag("appendix", "appendix").Default(".smalt.json").String()
+	geneFileFlag := app.Flag("gene-file", "gene file").Default("").String()
+	byGeneFlag := app.Flag("by-gene", "by gene").Default("false").Bool()
 	kingpin.MustParse(app.Parse(os.Args[1:]))
 	sampleFile = *sampleFileArg
 	outfile = *outFileArg
 	appendix = *appendixFlag
+	geneFile = *geneFileFlag
+	byGene = *byGeneFlag
+
+	var geneSet map[string]bool
+	if geneFile != "" {
+		geneSet = make(map[string]bool)
+		genes := readLines(geneFile)
+		for _, gene := range genes {
+			geneSet[gene] = true
+		}
+	}
 
 	collectorMap := make(map[string]*Collector)
+	if !byGene {
+		collectorMap["all"] = NewCollector()
+	}
 
 	samples := readSamples(sampleFile)
 	existSamples := checkFiles(samples, appendix)
@@ -40,11 +58,22 @@ func main() {
 		corrChan := readCorrResults(corrFile)
 		for corrResults := range corrChan {
 			geneID := corrResults.GeneID
-			_, found := collectorMap[geneID]
-			if !found {
-				collectorMap[geneID] = NewCollector()
+			if geneFile != "" {
+				if !geneSet[geneID] {
+					continue
+				}
 			}
-			collectorMap[geneID].Add(corrResults)
+
+			id := "all"
+			if byGene {
+				_, found := collectorMap[geneID]
+				if !found {
+					collectorMap[geneID] = NewCollector()
+				}
+				id = geneID
+			}
+
+			collectorMap[id].Add(corrResults)
 		}
 		pbar.Increment()
 	}
@@ -128,4 +157,27 @@ func checkFiles(samples []string, appendix string) []string {
 		}
 	}
 	return results
+}
+
+// readLines return all trimmed lines.
+func readLines(filename string) []string {
+	f, err := os.Open(filename)
+	if err != nil {
+		log.Panic(err)
+	}
+	defer f.Close()
+
+	rd := bufio.NewReader(f)
+	var lines []string
+	for {
+		line, err := rd.ReadString('\n')
+		if err != nil {
+			if err != io.EOF {
+				log.Panic(err)
+			}
+			break
+		}
+		lines = append(lines, strings.TrimSpace(line))
+	}
+	return lines
 }
