@@ -137,7 +137,7 @@ func main() {
 				gene := pileupCodons(geneRecords)
 				ok := checkCoverage(gene, geneLen, minDepth, minCoverage)
 				if ok {
-					p2 := calcP2(gene, maxl, minDepth, codeTable)
+					p2 := calcP2(gene, 21, minDepth, codeTable)
 					p4 := calcP4(gene, maxl, minDepth, codeTable)
 					p2 = append(p2, p4...)
 					p2Chan <- CorrResults{Results: p2, GeneID: geneRecords.ID, GeneLenth: geneLen, ReadNum: len(geneRecords.Records)}
