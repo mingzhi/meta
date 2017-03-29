@@ -284,7 +284,7 @@ func calcP2(gene *CodonGene, maxl, minDepth int, codeTable *taxonomy.GeneticCode
 					for len(p2Res) <= lag {
 						p2Res = append(p2Res, CorrResult{Type: "P2", Lag: len(p2Res)})
 					}
-					xy, _, _, n := nc.Cov11(0)
+					xy, _, _, n := nc.Cov11(MinAlleleDepth)
 					p2Res[lag].Count += int64(n)
 					p2Res[lag].Value += xy
 				}
