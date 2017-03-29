@@ -101,8 +101,12 @@ func (cg *CodonGene) PairCodonAt(i, j int) (pairs []CodonPair) {
 	pile2 := cg.CodonPiles[j]
 	for k := 0; k < pile1.Len(); k++ {
 		codon1 := pile1.Codons[k]
-		codon2 := pile2.SearchReadByID(codon1.ReadID)
-
+		var codon2 Codon
+		if i == j {
+			codon2 = codon1
+		} else {
+			codon2 = pile2.SearchReadByID(codon1.ReadID)
+		}
 		if codon2.ReadID != "" {
 			pairs = append(pairs, CodonPair{A: codon1, B: codon2})
 		}
