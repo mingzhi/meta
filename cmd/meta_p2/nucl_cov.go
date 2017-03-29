@@ -68,12 +68,12 @@ func (nc *NuclCov) Cov00() (xy, xbar, ybar float64, n int) {
 }
 
 // Cov11 returns the covariance.
-func (nc *NuclCov) Cov11() (xy, xbar, ybar float64, n int) {
+func (nc *NuclCov) Cov11(minDepth int) (xy, xbar, ybar float64, n int) {
 	sizeOfAlphabet := len(nc.Alphabet)
 	for i := 0; i < len(nc.Doublets); i++ {
-		if nc.Doublets[i] > 0 {
+		if nc.Doublets[i] > minDepth {
 			for j := i + 1; j < len(nc.Doublets); j++ {
-				if nc.Doublets[j] > 0 {
+				if nc.Doublets[j] > minDepth {
 					c := float64(nc.Doublets[i] * nc.Doublets[j])
 					if i%sizeOfAlphabet != j%sizeOfAlphabet && i/sizeOfAlphabet != j/sizeOfAlphabet {
 						xy += c
