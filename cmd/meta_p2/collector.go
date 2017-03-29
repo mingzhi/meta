@@ -101,8 +101,10 @@ func (c *Collector) Results() (results []CorrResult) {
 					res.Type = "Ks"
 					ks = res.Value
 				} else {
-					res.Value /= ks
-					res.Variance /= (ks * ks)
+					if ks != 0 {
+						res.Value /= ks
+						res.Variance /= (ks * ks)
+					}
 				}
 				results = append(results, res)
 			}
