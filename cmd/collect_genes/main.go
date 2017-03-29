@@ -12,34 +12,31 @@ import (
 	"sort"
 
 	"github.com/alecthomas/kingpin"
-	"github.com/cheggaaa/pb"
 )
 
 func main() {
-	var sampleFile string
-	var appendix string
+	var corrFile string
 	var outfile string
 	var geneFile string
 	var byGene bool
 	app := kingpin.New("collect_genes", "Calculate correlation across multiple samples")
 	app.Version("v0.1")
-	sampleFileArg := app.Arg("sample-file", "sample file").Required().String()
+	corrFileArg := app.Arg("corr-res-file", "corr results file").Required().String()
 	outFileArg := app.Arg("out-file", "output file").Required().String()
-	appendixFlag := app.Flag("appendix", "appendix").Default(".smalt.json").String()
 	geneFileFlag := app.Flag("gene-file", "gene file").Default("").String()
 	byGeneFlag := app.Flag("by-gene", "by gene").Default("false").Bool()
 	kingpin.MustParse(app.Parse(os.Args[1:]))
-	sampleFile = *sampleFileArg
+	corrFile = *corrFileArg
 	outfile = *outFileArg
-	appendix = *appendixFlag
 	geneFile = *geneFileFlag
 	byGene = *byGeneFlag
 
 	var geneSet map[string]bool
 	if geneFile != "" {
 		geneSet = make(map[string]bool)
-		genes := readLines(geneFile)
-		for _, gene := range genes {
+		lines := readLines(geneFile)
+		for _, line := range lines {
+			gene := strings.Split(line, "\t")[0]
 			geneSet[gene] = true
 		}
 	}
@@ -49,33 +46,16 @@ func main() {
 		collectorMap["all"] = NewCollector()
 	}
 
-	samples := readSamples(sampleFile)
-	existSamples := checkFiles(samples, appendix)
-	pbar := pb.StartNew(len(existSamples))
-	defer pbar.Finish()
-	for _, sample := range existSamples {
-		corrFile := sample + appendix
-		corrChan := readCorrResults(corrFile)
-		for corrResults := range corrChan {
-			geneID := corrResults.GeneID
-			if geneFile != "" {
-				if !geneSet[geneID] {
-					continue
-				}
+	corrChan := readCorrResults(corrFile)
+	for corrResults := range corrChan {
+		geneID := corrResults.GeneID
+		if geneFile != "" {
+			if !geneSet[geneID] {
+				continue
 			}
-
-			id := "all"
-			if byGene {
-				_, found := collectorMap[geneID]
-				if !found {
-					collectorMap[geneID] = NewCollector()
-				}
-				id = geneID
-			}
-
-			collectorMap[id].Add(corrResults)
 		}
-		pbar.Increment()
+
+		collectorMap["all"].Add(corrResults)
 	}
 
 	w, err := os.Create(outfile)
