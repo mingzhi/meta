@@ -50,6 +50,9 @@ var MinBaseQuality int
 // MinMapQuality min map quality
 var MinMapQuality int
 
+// MinAlleleDepth min allele depth.
+var MinAlleleDepth int
+
 func main() {
 	// Command variables.
 	var bamFile string      // bam or sam file
@@ -77,6 +80,7 @@ func main() {
 	minMapQFlag := app.Flag("min-map-qual", "min mapping quality").Default("30").Int()
 	corrResFileFlag := app.Flag("corr-res-file", "corr result file").Default("").String()
 	geneFileFlag := app.Flag("gene-file", "gene file").Default("").String()
+	minAlleleDepthFlag := app.Flag("min-allele-depth", "min allele depth").Default("0").Int()
 	kingpin.MustParse(app.Parse(os.Args[1:]))
 
 	bamFile = *bamFileArg
@@ -95,6 +99,7 @@ func main() {
 	MinMapQuality = *minMapQFlag
 	corrResFile = *corrResFileFlag
 	geneFile = *geneFileFlag
+	MinAlleleDepth = *minAlleleDepthFlag
 
 	runtime.GOMAXPROCS(ncpu)
 
@@ -348,7 +353,7 @@ func autoCov(gene *CodonGene, i, minDepth int, codeTable *taxonomy.GeneticCode) 
 			nc := NewNuclCov(alphabet)
 			doubleCount(nc, synPairs)
 
-			xy, _, _, n := nc.Cov11(4)
+			xy, _, _, n := nc.Cov11(MinAlleleDepth)
 			value += xy
 			count += n
 		}
