@@ -1,8 +1,6 @@
 package main
 
 import (
-	"sort"
-
 	"github.com/mingzhi/ncbiftp/taxonomy"
 )
 
@@ -15,7 +13,8 @@ type Codon struct {
 
 // CodonPile stores a pile of Codon, which are at a particular genome position.
 type CodonPile struct {
-	Codons []Codon
+	genePos  int
+	codonMap map[string]Codon
 }
 
 // NewCodonPile return a new CodonPile.
@@ -23,29 +22,25 @@ func NewCodonPile() *CodonPile {
 	return &CodonPile{}
 }
 
-// Append appends a new Codon.
-func (cp *CodonPile) Append(c Codon) {
-	cp.Codons = append(cp.Codons, c)
+// Add appends a new Codon.
+func (cp *CodonPile) Add(c Codon) {
+	cp.genePos = c.GenePos
+	cp.codonMap[c.ReadID] = c
 }
 
-// SortReadByID sorts Codons by ReadName
-func (cp *CodonPile) SortReadByID() {
-	sort.Slice(cp.Codons, func(i, j int) bool { return cp.Codons[i].ReadID < cp.Codons[j].ReadID })
-}
-
-// SearchReadByID search a codon by ReadName. If not found, it returns nil.
-func (cp *CodonPile) SearchReadByID(readID string) Codon {
-	data := cp.Codons
-	i := sort.Search(len(data), func(i int) bool { return data[i].ReadID >= readID })
-	if i < len(data) && data[i].ReadID == readID {
-		return data[i]
-	}
-	return Codon{ReadID: ""}
+// LookUp search a codon by ReadName. If not found, it returns nil.
+func (cp *CodonPile) LookUp(readID string) Codon {
+	return cp.codonMap[readID]
 }
 
 // Len return the lenght of pileup Codons.
 func (cp *CodonPile) Len() int {
-	return len(cp.Codons)
+	return len(cp.codonMap)
+}
+
+// GenePos return the gene position.
+func (cp *CodonPile) GenePos() int {
+	return cp.genePos
 }
 
 // CodonGene represents a gene with an array of CodonPile.
@@ -63,7 +58,7 @@ func (cg *CodonGene) AddCodon(c Codon) {
 	for len(cg.CodonPiles) <= c.GenePos {
 		cg.CodonPiles = append(cg.CodonPiles, NewCodonPile())
 	}
-	cg.CodonPiles[c.GenePos].Append(c)
+	cg.CodonPiles[c.GenePos].Add(c)
 }
 
 // DepthAt return the pile depth at position i.
@@ -79,13 +74,6 @@ func (cg *CodonGene) Len() int {
 	return len(cg.CodonPiles)
 }
 
-// SortCodonByReadID sorts codons by read id for each codon pile.
-func (cg *CodonGene) SortCodonByReadID() {
-	for i := range cg.CodonPiles {
-		cg.CodonPiles[i].SortReadByID()
-	}
-}
-
 // CodonPair stores a pair of Codon
 type CodonPair struct {
 	A, B Codon
@@ -97,21 +85,21 @@ func (cg *CodonGene) PairCodonAt(i, j int) (pairs []CodonPair) {
 		return
 	}
 
+	if i > j {
+		j, i = i, j
+	}
+
 	pile1 := cg.CodonPiles[i]
-	pile2 := cg.CodonPiles[j]
-	for k := 0; k < pile1.Len(); k++ {
-		codon1 := pile1.Codons[k]
-		var codon2 Codon
-		if i == j {
-			codon2 = codon1
-		} else {
-			codon2 = pile2.SearchReadByID(codon1.ReadID)
+	if i == j {
+		for _, codon := range pile1.codonMap {
+			pairs = append(pairs, CodonPair{A: codon, B: codon})
 		}
+	}
+	pile2 := cg.CodonPiles[j]
+	for readID, codon1 := range pile1.codonMap {
+		codon2 := pile2.LookUp(readID)
 		if codon2.ReadID != "" {
 			pairs = append(pairs, CodonPair{A: codon1, B: codon2})
-		}
-		if len(pairs) == pile2.Len() {
-			break
 		}
 	}
 	return

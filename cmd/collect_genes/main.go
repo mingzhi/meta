@@ -7,9 +7,8 @@ import (
 	"io"
 	"log"
 	"os"
-	"strings"
-
 	"sort"
+	"strings"
 
 	"github.com/alecthomas/kingpin"
 )

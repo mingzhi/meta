@@ -260,7 +260,6 @@ func doubleCount(nc *NuclCov, codonPairArray []CodonPair) {
 }
 
 func calcP2(gene *CodonGene, maxl, minDepth int, codeTable *taxonomy.GeneticCode) (p2Res []CorrResult) {
-	gene.SortCodonByReadID()
 	alphabet := []byte{'A', 'T', 'G', 'C'}
 	for i := 0; i < gene.Len(); i++ {
 		for j := i; j < gene.Len(); j++ {
@@ -297,19 +296,17 @@ func calcP2(gene *CodonGene, maxl, minDepth int, codeTable *taxonomy.GeneticCode
 }
 
 func calcP4(gene *CodonGene, maxl, minDepth int, codeTable *taxonomy.GeneticCode) (p4Res []CorrResult) {
-	gene.SortCodonByReadID()
 	var valueArray []float64
 	var countArray []int
 	var posArray []int
 	for i := 0; i < gene.Len(); i++ {
 		value, count := autoCov(gene, i, minDepth, codeTable)
 		if count > 0 {
-			pos := gene.CodonPiles[i].Codons[0].GenePos
+			pos := gene.CodonPiles[i].GenePos()
 			valueArray = append(valueArray, value)
 			countArray = append(countArray, count)
 			posArray = append(posArray, pos)
 		}
-
 	}
 	for i := 0; i < len(valueArray); i++ {
 		value1 := valueArray[i]
