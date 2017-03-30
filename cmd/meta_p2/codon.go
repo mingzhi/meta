@@ -19,7 +19,7 @@ type CodonPile struct {
 
 // NewCodonPile return a new CodonPile.
 func NewCodonPile() *CodonPile {
-	return &CodonPile{}
+	return &CodonPile{codonMap: make(map[string]Codon)}
 }
 
 // Add appends a new Codon.
