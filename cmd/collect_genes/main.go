@@ -17,17 +17,21 @@ func main() {
 	var corrFile string
 	var outfile string
 	var geneFile string
+	var sampleFile string
 	var byGene bool
 	app := kingpin.New("collect_genes", "Calculate correlation across multiple samples")
 	app.Version("v0.1")
-	corrFileArg := app.Arg("corr-res-file", "corr results file").Required().String()
+
 	outFileArg := app.Arg("out-file", "output file").Required().String()
+	corrFileArg := app.Flag("corr-res-file", "corr results file").Default("").String()
 	geneFileFlag := app.Flag("gene-file", "gene file").Default("").String()
+	sampleFileFlag := app.Flag("sample-file", "sample file").Default("").String()
 	byGeneFlag := app.Flag("by-gene", "by gene").Default("false").Bool()
 	kingpin.MustParse(app.Parse(os.Args[1:]))
 	corrFile = *corrFileArg
 	outfile = *outFileArg
 	geneFile = *geneFileFlag
+	sampleFile = *sampleFileFlag
 	byGene = *byGeneFlag
 
 	var geneSet map[string]bool
@@ -39,22 +43,32 @@ func main() {
 			geneSet[gene] = true
 		}
 	}
+	var samples []string
+	if sampleFile != "" {
+		lines := readLines(sampleFile)
+		for _, line := range lines {
+			samples = append(samples, strings.TrimSpace(line))
+		}
+	} else {
+		samples = append(samples, corrFile)
+	}
 
 	collectorMap := make(map[string]*Collector)
 	if !byGene {
 		collectorMap["all"] = NewCollector()
 	}
-
-	corrChan := readCorrResults(corrFile)
-	for corrResults := range corrChan {
-		geneID := corrResults.GeneID
-		if geneFile != "" {
-			if !geneSet[geneID] {
-				continue
+	for _, sampleFile := range samples {
+		corrChan := readCorrResults(sampleFile)
+		for corrResults := range corrChan {
+			geneID := corrResults.GeneID
+			if geneFile != "" {
+				if !geneSet[geneID] {
+					continue
+				}
 			}
-		}
 
-		collectorMap["all"].Add(corrResults)
+			collectorMap["all"].Add(corrResults)
+		}
 	}
 
 	w, err := os.Create(outfile)
