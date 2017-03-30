@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/alecthomas/kingpin"
+	"github.com/cheggaaa/pb"
 )
 
 func main() {
@@ -54,9 +55,16 @@ func main() {
 	}
 
 	collectorMap := make(map[string]*Collector)
-	if !byGene {
-		collectorMap["all"] = NewCollector()
+	if byGene {
+		if geneFile != "" {
+			for geneID := range geneSet {
+				collectorMap[geneID] = NewCollector()
+			}
+		}
 	}
+	collectorMap["all"] = NewCollector()
+	pbar := pb.StartNew(len(samples))
+	defer pbar.Finish()
 	for _, sampleFile := range samples {
 		corrChan := readCorrResults(sampleFile)
 		for corrResults := range corrChan {
@@ -66,9 +74,12 @@ func main() {
 					continue
 				}
 			}
-
+			if byGene {
+				collectorMap[geneID].Add(corrResults)
+			}
 			collectorMap["all"].Add(corrResults)
 		}
+		pbar.Increment()
 	}
 
 	w, err := os.Create(outfile)
