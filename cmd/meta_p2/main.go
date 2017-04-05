@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"math"
+	"math/rand"
 	"os"
 	"runtime"
 
@@ -64,10 +65,11 @@ func main() {
 	var gffFile string      // gff file
 	var corrResFile string  // corr result file.
 	var geneFile string     // gene file.
+	var maxDepth float64    // max depth
 
 	// Parse command arguments.
 	app := kingpin.New("meta_p2", "Calculate mutation correlation from bacterial metagenomic sequence data")
-	app.Version("v0.1")
+	app.Version("v20170405")
 	bamFileArg := app.Arg("bamfile", "bam file").Required().String()
 	outFileArg := app.Arg("outfile", "out file").Required().String()
 	maxlFlag := app.Flag("maxl", "max len of correlations").Default("100").Int()
@@ -81,6 +83,7 @@ func main() {
 	corrResFileFlag := app.Flag("corr-res-file", "corr result file").Default("").String()
 	geneFileFlag := app.Flag("gene-file", "gene file").Default("").String()
 	minAlleleDepthFlag := app.Flag("min-allele-depth", "min allele depth").Default("0").Int()
+	maxDepthFlag := app.Flag("max-depth", "max coverage depth for each gene").Default("0").Float64()
 	kingpin.MustParse(app.Parse(os.Args[1:]))
 
 	bamFile = *bamFileArg
@@ -100,6 +103,7 @@ func main() {
 	corrResFile = *corrResFileFlag
 	geneFile = *geneFileFlag
 	MinAlleleDepth = *minAlleleDepthFlag
+	maxDepth = *maxDepthFlag
 
 	runtime.GOMAXPROCS(ncpu)
 
@@ -133,6 +137,9 @@ func main() {
 					if !geneSet[geneRecords.ID] {
 						continue
 					}
+				}
+				if maxDepth > 0 {
+					geneRecords = subsample(geneRecords, maxDepth)
 				}
 				geneLen := geneRecords.End - geneRecords.Start
 				gene := pileupCodons(geneRecords)
@@ -481,4 +488,26 @@ func readLines(filename string) []string {
 		lines = append(lines, strings.TrimSpace(line))
 	}
 	return lines
+}
+
+// subsample
+func subsample(geneRecords GeneSamRecords, maxDepth float64) GeneSamRecords {
+	length := float64(geneRecords.End - geneRecords.Start)
+	readNum := len(geneRecords.Records)
+	readLen := float64(geneRecords.Records[0].Len())
+	maxReadNum := int(length * maxDepth / readLen)
+	if readNum <= maxReadNum {
+		return geneRecords
+	}
+
+	oldRecords := geneRecords.Records
+	geneRecords.Records = []*sam.Record{}
+	ratio := float64(maxReadNum) / float64(readNum)
+	for _, read := range oldRecords {
+		if rand.Float64() < ratio {
+			geneRecords.Records = append(geneRecords.Records, read)
+		}
+	}
+
+	return geneRecords
 }
