@@ -119,6 +119,7 @@ func main() {
 
 	var geneSet map[string]bool
 	if geneFile != "" {
+		geneSet = make(map[string]bool)
 		lines := readLines(geneFile)
 		for _, line := range lines {
 			gene := strings.Split(line, "\t")[0]
