@@ -75,7 +75,7 @@ func main() {
 	maxlFlag := app.Flag("maxl", "max len of correlations").Default("100").Int()
 	ncpuFlag := app.Flag("ncpu", "number of CPUs").Default("0").Int()
 	minDepthFlag := app.Flag("min-depth", "min depth").Default("10").Int()
-	minCoverageFlag := app.Flag("min-coverage", "min coverage").Default("0.8").Float64()
+	minCoverageFlag := app.Flag("min-coverage", "min coverage").Default("2").Float64()
 	progressFlag := app.Flag("progress", "show progress").Default("false").Bool()
 	gffFileFlag := app.Flag("gff-file", "gff file").Default("").String()
 	minBaseQFlag := app.Flag("min-base-qual", "min base quality").Default("30").Int()
@@ -190,10 +190,10 @@ func main() {
 	}
 	defer w.Close()
 
-	w.WriteString("l,m,v,n,t\n")
+	w.WriteString("l,m,v,n,t,b\n")
 	results := collector.Results()
 	for _, res := range results {
-		w.WriteString(fmt.Sprintf("%d,%g,%g,%d,%s\n",
+		w.WriteString(fmt.Sprintf("%d,%g,%g,%d,%s,all\n",
 			res.Lag, res.Value, res.Variance, res.Count, res.Type))
 	}
 }
@@ -202,7 +202,7 @@ func main() {
 func pileupCodons(geneRecords GeneSamRecords) (codonGene *CodonGene) {
 	codonGene = NewCodonGene()
 	for _, read := range geneRecords.Records {
-		if int(read.MapQ) < MinMapQuality || len(read.Cigar) > 1 || read.Cigar[0].Type() != sam.CigarMatch {
+		if int(read.MapQ) < MinMapQuality {//|| len(read.Cigar) > 1 || read.Cigar[0].Type() != sam.CigarMatch {
 			continue
 		}
 		codonArray := getCodons(read, geneRecords.Start, geneRecords.Strand)
@@ -463,7 +463,7 @@ func checkCoverage(gene *CodonGene, geneLen, minDepth int, minCoverage float64) 
 			num++
 		}
 	}
-	coverage := float64(num) / float64(geneLen/3)
+	coverage := float64(num)
 	ok = coverage > minCoverage
 	return
 }
