@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"fmt"
 	"log"
-	"math"
 	"math/rand"
 	"os"
 	"runtime"
@@ -18,10 +17,8 @@ import (
 
 	"github.com/biogo/hts/sam"
 	"github.com/mingzhi/biogo/seq"
-	"github.com/mingzhi/gomath/stat/desc/meanvar"
 	"github.com/mingzhi/ncbiftp/taxonomy"
 	"gopkg.in/alecthomas/kingpin.v2"
-	"gopkg.in/cheggaaa/pb.v1"
 )
 
 // MappedRead contains the section of a read mapped to a reference genome.
@@ -146,7 +143,7 @@ func main() {
 				gene := pileupCodons(geneRecords)
 				ok := checkCoverage(gene, geneLen, minDepth, minCoverage)
 				if ok {
-					p2 := calcP2(gene, 21, minDepth, codeTable)
+					p2 := calcP2(gene, maxl, minDepth, codeTable)
 					p4 := calcP4(gene, maxl, minDepth, codeTable)
 					p2 = append(p2, p4...)
 					p2Chan <- CorrResults{Results: p2, GeneID: geneRecords.ID, GeneLenth: geneLen, ReadNum: len(geneRecords.Records)}
@@ -202,7 +199,7 @@ func main() {
 func pileupCodons(geneRecords GeneSamRecords) (codonGene *CodonGene) {
 	codonGene = NewCodonGene()
 	for _, read := range geneRecords.Records {
-		if int(read.MapQ) < MinMapQuality {//|| len(read.Cigar) > 1 || read.Cigar[0].Type() != sam.CigarMatch {
+		if int(read.MapQ) < MinMapQuality { //|| len(read.Cigar) > 1 || read.Cigar[0].Type() != sam.CigarMatch {
 			continue
 		}
 		codonArray := getCodons(read, geneRecords.Start, geneRecords.Strand)
@@ -365,63 +362,6 @@ func autoCov(gene *CodonGene, i, minDepth int, codeTable *taxonomy.GeneticCode) 
 		}
 	}
 	return
-}
-
-// collect
-func collect(p2Chan chan []P2, maxl, numJob int) (meanVars []*meanvar.MeanVar) {
-	meanVars = []*meanvar.MeanVar{}
-	for i := 0; i < maxl; i++ {
-		meanVars = append(meanVars, meanvar.New())
-	}
-
-	var pbar *pb.ProgressBar
-	if ShowProgress {
-		pbar = pb.StartNew(numJob)
-		defer pbar.Finish()
-	}
-
-	for p2 := range p2Chan {
-		for i := range p2 {
-			n := p2[i].Count
-			v := p2[i].Total
-			if n > 100 {
-				meanVars[i].Increment(v / float64(n))
-			}
-		}
-		if ShowProgress {
-			pbar.Increment()
-		}
-	}
-
-	return
-}
-
-// write
-func write(meanVars []*meanvar.MeanVar, filename string) {
-	w, err := os.Create(filename)
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer w.Close()
-
-	w.WriteString("l,m,v,n,t,b\n")
-	ks := 0.0
-	for i := 0; i < len(meanVars); i++ {
-		m := meanVars[i].Mean.GetResult()
-		v := meanVars[i].Var.GetResult()
-		n := meanVars[i].Mean.GetN()
-		if n == 0 || math.IsNaN(v) {
-			continue
-		}
-		t := "P2"
-		if i == 0 {
-			t = "Ks"
-			ks = m
-		} else {
-			m = m / ks
-		}
-		w.WriteString(fmt.Sprintf("%d,%g,%g,%d,%s,all\n", i*3, m, v, n, t))
-	}
 }
 
 // Map2Ref Obtains a read mapping to the reference genome.
