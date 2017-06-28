@@ -1,18 +1,16 @@
+// Calculate correlation functions (P2 and P4) from read mapping results.
 package main
 
 import (
+	"bufio"
 	"bytes"
+	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"math/rand"
 	"os"
 	"runtime"
-
-	"encoding/json"
-
-	"bufio"
-
-	"io"
 	"strings"
 
 	"github.com/biogo/hts/sam"
@@ -21,22 +19,10 @@ import (
 	"gopkg.in/alecthomas/kingpin.v2"
 )
 
-// MappedRead contains the section of a read mapped to a reference genome.
-type MappedRead struct {
-	Pos  int
-	Seq  []byte
-	Qual []byte
-}
-
 // SubProfile Substitution/mutation profile.
 type SubProfile struct {
 	Pos     int
 	Profile []float64
-}
-
-// Len return the lenght of a sequence.
-func (m MappedRead) Len() int {
-	return len(m.Seq)
 }
 
 // ShowProgress show progress.
@@ -50,6 +36,9 @@ var MinMapQuality int
 
 // MinAlleleDepth min allele depth.
 var MinAlleleDepth int
+
+// MinReadLength minimal read length
+var MinReadLength int
 
 func main() {
 	// Command variables.
@@ -72,7 +61,7 @@ func main() {
 	maxlFlag := app.Flag("maxl", "max len of correlations").Default("100").Int()
 	ncpuFlag := app.Flag("ncpu", "number of CPUs").Default("0").Int()
 	minDepthFlag := app.Flag("min-depth", "min depth").Default("10").Int()
-	minCoverageFlag := app.Flag("min-coverage", "min coverage").Default("2").Float64()
+	minCoverageFlag := app.Flag("min-coverage", "min coverage").Default("0.8").Float64()
 	progressFlag := app.Flag("progress", "show progress").Default("false").Bool()
 	gffFileFlag := app.Flag("gff-file", "gff file").Default("").String()
 	minBaseQFlag := app.Flag("min-base-qual", "min base quality").Default("30").Int()
@@ -81,6 +70,7 @@ func main() {
 	geneFileFlag := app.Flag("gene-file", "gene file").Default("").String()
 	minAlleleDepthFlag := app.Flag("min-allele-depth", "min allele depth").Default("0").Int()
 	maxDepthFlag := app.Flag("max-depth", "max coverage depth for each gene").Default("0").Float64()
+	minReadLenFlag := app.Flag("min-read-length", "minimal read length").Default("60").Int()
 	kingpin.MustParse(app.Parse(os.Args[1:]))
 
 	bamFile = *bamFileArg
@@ -101,6 +91,7 @@ func main() {
 	geneFile = *geneFileFlag
 	MinAlleleDepth = *minAlleleDepthFlag
 	maxDepth = *maxDepthFlag
+	MinReadLength = *minReadLenFlag
 
 	runtime.GOMAXPROCS(ncpu)
 
@@ -199,16 +190,31 @@ func main() {
 func pileupCodons(geneRecords GeneSamRecords) (codonGene *CodonGene) {
 	codonGene = NewCodonGene()
 	for _, read := range geneRecords.Records {
-		if int(read.MapQ) < MinMapQuality { //|| len(read.Cigar) > 1 || read.Cigar[0].Type() != sam.CigarMatch {
-			continue
-		}
-		codonArray := getCodons(read, geneRecords.Start, geneRecords.Strand)
-		for _, codon := range codonArray {
-			codonGene.AddCodon(codon)
+		if checkReadQuality(read) {
+			codonArray := getCodons(read, geneRecords.Start, geneRecords.Strand)
+			for _, codon := range codonArray {
+				if !codon.ContainsGap() {
+					codonGene.AddCodon(codon)
+				}
+			}
 		}
 	}
 
 	return
+}
+
+// checkReadQuality return false if the read fails quality check.
+func checkReadQuality(read *sam.Record) bool {
+	if int(read.MapQ) < MinMapQuality || read.Len() < MinReadLength {
+		return false
+	}
+
+	for _, cigar := range read.Cigar {
+		if cigar.Type() != sam.CigarMatch || cigar.Type() != sam.CigarSoftClipped {
+			return false
+		}
+	}
+	return true
 }
 
 // getCodons split a read into a list of Codon.
@@ -403,7 +409,7 @@ func checkCoverage(gene *CodonGene, geneLen, minDepth int, minCoverage float64) 
 			num++
 		}
 	}
-	coverage := float64(num)
+	coverage := float64(num) / float64(geneLen) * 3.0 // codon pile is in unit of codons (3)
 	ok = coverage > minCoverage
 	return
 }

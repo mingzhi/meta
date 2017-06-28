@@ -11,6 +11,16 @@ type Codon struct {
 	GenePos int
 }
 
+// ContainsGap return true if '-' in a sequence.
+func (c Codon) ContainsGap() bool {
+	for _, b := range c.Seq {
+		if b == '-' {
+			return true
+		}
+	}
+	return false
+}
+
 // CodonPile stores a pile of Codon, which are at a particular genome position.
 type CodonPile struct {
 	genePos  int
