@@ -60,8 +60,8 @@ func main() {
 	outFileArg := app.Arg("outfile", "out file").Required().String()
 	maxlFlag := app.Flag("maxl", "max len of correlations").Default("100").Int()
 	ncpuFlag := app.Flag("ncpu", "number of CPUs").Default("0").Int()
-	minDepthFlag := app.Flag("min-depth", "min depth").Default("10").Int()
-	minCoverageFlag := app.Flag("min-coverage", "min coverage").Default("0.8").Float64()
+	minDepthFlag := app.Flag("min-depth", "min depth").Default("5").Int()
+	minCoverageFlag := app.Flag("min-coverage", "min coverage").Default("0.5").Float64()
 	progressFlag := app.Flag("progress", "show progress").Default("false").Bool()
 	gffFileFlag := app.Flag("gff-file", "gff file").Default("").String()
 	minBaseQFlag := app.Flag("min-base-qual", "min base quality").Default("30").Int()
@@ -210,7 +210,7 @@ func checkReadQuality(read *sam.Record) bool {
 	}
 
 	for _, cigar := range read.Cigar {
-		if cigar.Type() != sam.CigarMatch || cigar.Type() != sam.CigarSoftClipped {
+		if cigar.Type() != sam.CigarMatch && cigar.Type() != sam.CigarSoftClipped {
 			return false
 		}
 	}
