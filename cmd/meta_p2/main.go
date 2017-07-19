@@ -209,12 +209,13 @@ func checkReadQuality(read *sam.Record) bool {
 		return false
 	}
 
-	for _, cigar := range read.Cigar {
-		if cigar.Type() != sam.CigarMatch && cigar.Type() != sam.CigarSoftClipped {
-			return false
-		}
-	}
-	return true
+	//		for _, cigar := range read.Cigar {
+	//			if cigar.Type() != sam.CigarMatch && cigar.Type() != sam.CigarSoftClipped {
+	//				return false
+	//			}
+	//		}
+	
+    return true
 }
 
 // getCodons split a read into a list of Codon.
@@ -375,13 +376,24 @@ func Map2Ref(r *sam.Record) (s []byte, q []byte) {
 	p := 0                 // position in the read sequence.
 	read := r.Seq.Expand() // read sequence.
 	qual := r.Qual
+	length := 0
+	for _, c := range r.Cigar {
+		switch c.Type() {
+		case sam.CigarMatch, sam.CigarMismatch, sam.CigarEqual, sam.CigarSoftClipped:
+			length += c.Len()
+		}
+	}
+	if length != len(read) || len(read) != len(qual) {
+		return
+	}
+
 	for _, c := range r.Cigar {
 		switch c.Type() {
 		case sam.CigarMatch, sam.CigarMismatch, sam.CigarEqual:
 			s = append(s, read[p:p+c.Len()]...)
 			q = append(q, qual[p:p+c.Len()]...)
 			p += c.Len()
-		case sam.CigarInsertion, sam.CigarSoftClipped, sam.CigarHardClipped:
+		case sam.CigarInsertion, sam.CigarSoftClipped:
 			p += c.Len()
 		case sam.CigarDeletion, sam.CigarSkipped:
 			for i := 0; i < c.Len(); i++ {
